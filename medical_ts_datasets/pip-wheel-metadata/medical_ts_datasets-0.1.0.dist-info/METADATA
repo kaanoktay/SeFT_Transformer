@@ -1,0 +1,14 @@
+Metadata-Version: 2.1
+Name: medical-ts-datasets
+Version: 0.1.0
+Summary: 
+Author: Anonymous
+Requires-Python: >=3.7,<4.0
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Requires-Dist: pandas (>=0.25.3,<0.26.0)
+Requires-Dist: pip (>=19.0.0)
+Requires-Dist: setuptools (>=41.0.0)
+Requires-Dist: tensorflow (>=2.1.0,<3.0.0)
+Requires-Dist: tensorflow-datasets (>=3.1.0,<4.0.0)
