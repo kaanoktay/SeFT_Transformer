@@ -35,8 +35,8 @@
 - Download and go inside the repository:
 
   ```bash
-  git clone https://github.com/kaanoktay/SeFT_ConvCNP.git
-  cd SeFT_ConvCNP
+  git clone https://github.com/kaanoktay/SeFT_Transformer.git
+  cd SeFT_Transformer
   ```
 
 - Run the main file as below:
