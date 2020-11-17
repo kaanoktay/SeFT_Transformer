@@ -1,6 +1,5 @@
 """Utility functions for training and evaluation."""
 import math
-import random
 
 from collections.abc import Sequence
 
@@ -15,24 +14,6 @@ get_output_types = tf.compat.v1.data.get_output_types
 make_one_shot_iterator = tf.compat.v1.data.make_one_shot_iterator
 
 
-## Function to get the command line arguments
-def argumentParser():
-    parser = argparse.ArgumentParser(description='Embedding Translational Equivariance to SeFT')
-    parser.add_argument('--batch_size', type=int, default=16, metavar="16", help='batch size')
-    parser.add_argument('--points_per_hour', type=int, default=30, metavar="30", help='points per hour for the grid')
-    parser.add_argument('--num_epochs', type=int, default=10, metavar="10", help='number of epochs')
-    parser.add_argument('--init_learning_rate', type=float, default=0.001, metavar="0.001", help='initial learning rate')
-    parser.add_argument('--kernel_size', type=int, default=5, metavar="5", help='kernel size of the convolutional layers')
-    parser.add_argument('--dilation_rate', type=int, default=2, metavar="2", help='dilation rate of the convolutional layers')
-    parser.add_argument('--filter_size', type=int, default=64, metavar="64", help='filter size of the first convolutional layer')
-    parser.add_argument('--dropout_rate_conv', type=float, default=0.2, metavar="0.2", help='dropout rate of the convolutional layers')
-    parser.add_argument('--dropout_rate_dense', type=float, default=0.2, metavar="0.2", help='dropout rate of the dense layers')
-    parser.add_argument('--lr_decay_patience', type=int, default=2, metavar="2", help='number of unimproving epochs after which learning rate decays')
-    parser.add_argument('--lr_decay_rate', type=float, default=0.2, metavar="0.2", help='decay rate of learning rate')
-    return parser.parse_args()
-
-## After this point, everything is related to preprocessing of batches ##
-
 def positive_instances(*args):
     if len(args) == 2:
         data, label = args
@@ -41,12 +22,14 @@ def positive_instances(*args):
 
     return tf.math.equal(tf.reduce_max(label), 1)
 
+
 def negative_instances(*args):
     if len(args) == 2:
         data, label = args
     if len(args) == 3:
         data, label, sample_weights = args
     return tf.math.equal(tf.reduce_max(label), 0)
+
 
 def get_padding_values(input_dataset_types, label_padding=-100):
     """Get a tensor of padding values fitting input_dataset_types.
@@ -101,7 +84,8 @@ def build_training_iterator(dataset_name, epochs, batch_size, prepro_fn,
     n_samples = dataset_info.splits['train'].num_examples
     steps_per_epoch = int(math.floor(n_samples / batch_size))
     if prepro_fn is not None:
-        dataset = dataset.map(prepro_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.map(
+            prepro_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     if balance:
         majority_class = max(
@@ -148,6 +132,7 @@ def build_training_iterator(dataset_name, epochs, batch_size, prepro_fn,
     )
     return batched_dataset.prefetch(tf.data.experimental.AUTOTUNE), steps_per_epoch
 
+
 def build_validation_iterator(dataset_name, batch_size, prepro_fn):
     """Build a validation iterator for a tensorflow datasets dataset.
 
@@ -173,7 +158,8 @@ def build_validation_iterator(dataset_name, batch_size, prepro_fn):
     n_samples = dataset_info.splits['validation'].num_examples
     steps_per_epoch = int(math.ceil(n_samples / batch_size))
     if prepro_fn is not None:
-        dataset = dataset.map(prepro_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.map(
+            prepro_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     # Batch
     batched_dataset = dataset.padded_batch(
@@ -195,7 +181,8 @@ def build_test_iterator(dataset_name, batch_size, prepro_fn):
     n_samples = dataset_info.splits['test'].num_examples
     steps = int(math.floor(n_samples / batch_size))
     if prepro_fn is not None:
-        dataset = dataset.map(prepro_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        dataset = dataset.map(
+            prepro_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     # Batch
     batched_dataset = dataset.padded_batch(
@@ -206,7 +193,13 @@ def build_test_iterator(dataset_name, batch_size, prepro_fn):
     )
     return batched_dataset, steps
 
-class preprocessing(object):
+
+class Preprocessing(object):
+    """Preprocessing object.
+
+    Groups all routines used for preprocessing data.
+    """
+
     def __init__(self, dataset, epochs, batch_size, balance_dataset=True):
         self.dataset = dataset
         self.normalizer = Normalizer(dataset)

@@ -1,55 +1,83 @@
+"""Main module for training models."""
+import argparse
 import os
-import sys
 import tensorflow as tf
-import tensorflow_datasets as tfds
 from tensorflow import keras
-import medical_ts_datasets
-import numpy as np
-import pdb
 
-from .training_utils import (
-    preprocessing,
-    argumentParser
-)
+from .training_utils import Preprocessing
 
-from .models import *
+from .models import TimeSeriesTransformer
 
 tf.executing_eagerly()
 checkpoint_filepath = './checkpoints/cp.ckpt'
-os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.random.set_seed(0)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
 
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Embedding Translational Equivariance to SeFT')
+    parser.add_argument('--batch_size', type=int, default=16,
+                        metavar="16", help='batch size')
+    parser.add_argument('--points_per_hour', type=int, default=30,
+                        metavar="30", help='points per hour for the grid')
+    parser.add_argument('--num_epochs', type=int, default=10,
+                        metavar="10", help='number of epochs')
+    parser.add_argument('--init_learning_rate', type=float,
+                        default=0.001, metavar="0.001", help='initial learning rate')
+    parser.add_argument('--kernel_size', type=int, default=5,
+                        metavar="5", help='kernel size of the convolutional layers')
+    parser.add_argument('--dilation_rate', type=int, default=2,
+                        metavar="2", help='dilation rate of the convolutional layers')
+    parser.add_argument('--filter_size', type=int, default=64, metavar="64",
+                        help='filter size of the first convolutional layer')
+    parser.add_argument('--dropout_rate_conv', type=float, default=0.2,
+                        metavar="0.2", help='dropout rate of the convolutional layers')
+    parser.add_argument('--dropout_rate_dense', type=float, default=0.2,
+                        metavar="0.2", help='dropout rate of the dense layers')
+    parser.add_argument('--lr_decay_patience', type=int, default=2, metavar="2",
+                        help='number of unimproving epochs after which learning rate decays')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.2,
+                        metavar="0.2", help='decay rate of learning rate')
+    return parser.parse_args()
+
+
 def main():
-    ## Parse the command line arguments
-    args = argumentParser()
+    """Parse command line arguments and train model."""
+    args = parse_arguments()
 
-    ## Hyperparameters
-    batch_size = args.batch_size #Default: 16
-    num_epochs = args.num_epochs #Default: 10
-    init_learning_rate = args.init_learning_rate #Default: 1e-3
-    lr_decay_patience = args.lr_decay_patience #Default: 2
-    lr_decay_rate = args.lr_decay_rate #Default: 0.2
+    # Hyperparameters
+    batch_size = args.batch_size  # Default: 16
+    num_epochs = args.num_epochs  # Default: 10
+    init_learning_rate = args.init_learning_rate  # Default: 1e-3
+    lr_decay_patience = args.lr_decay_patience  # Default: 2
+    lr_decay_rate = args.lr_decay_rate  # Default: 0.2
 
-    ## Load data (epochs doesn't matter because it iterates over the dataset indefinetely)
-    transformation = preprocessing(dataset='physionet2012', epochs=num_epochs, batch_size=batch_size)
-    train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = transformation._prepare_dataset_for_training()
+    # Load data (epochs don't matter because we iterate over the dataset
+    # indefinitely)
+    transformation = Preprocessing(
+        dataset='physionet2012', epochs=num_epochs, batch_size=batch_size)
+    train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = \
+        transformation._prepare_dataset_for_training()
 
-    ## Initialize the model
-    model = timeSeriesTransformer(proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128, pred_ff_dim=32)
-    
-    ## Optimizer function
+    # Initialize the model
+    model = TimeSeriesTransformer(
+        proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128, pred_ff_dim=32)
+
+    # Optimizer function
     opt = keras.optimizers.Adam(
         learning_rate=init_learning_rate
     )
 
-    ## Loss function
+    # Loss function
     loss_fn = keras.losses.BinaryCrossentropy(
         from_logits=False,
         name="Loss"
     )
 
-    ## Compile the model
+    # Compile the model
     model.compile(
         optimizer=opt,
         loss=loss_fn,
@@ -58,12 +86,12 @@ def main():
                  keras.metrics.AUC(curve="ROC", name="auroc")]
     )
 
-    ## Callback for reducing the learning rate when the model get stuck in a plateau
+    # Callback for reducing the learning rate when the model get stuck in a plateau
     lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
         monitor='val_auprc',
         mode='max',
         factor=lr_decay_rate,
-        patience=lr_decay_patience, 
+        patience=lr_decay_patience,
         min_lr=0.0001
     )
 
@@ -74,7 +102,7 @@ def main():
         restore_best_weights=True
     )
 
-    ## Callback for saving the weights of the best model
+    # Callback for saving the weights of the best model
     model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_filepath,
         save_weights_only=True,
@@ -83,11 +111,12 @@ def main():
         save_best_only=True
     )
 
-    ## Fit the model to the input data
+    # Fit the model to the input data
     print("\n------- Training and Validation -------")
     model.fit(
         train_iter,
         epochs=num_epochs,
+        # TODO(Max): Are you sure about the -1 ?
         steps_per_epoch=steps_per_epoch-1,
         validation_data=val_iter,
         validation_steps=val_steps-1,
@@ -98,14 +127,14 @@ def main():
     )
 
     print("\n------- Test -------")
-    ## Fit the model to the input data
+    # Fit the model to the input data
     model.evaluate(
         test_iter,
         steps=test_steps-1,
         verbose=1
     )
     print("\n")
-    
-    
+
+
 if __name__ == "__main__":
     main()
