@@ -7,7 +7,6 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import medical_ts_datasets
 from .normalization import Normalizer
-import argparse
 
 get_output_shapes = tf.compat.v1.data.get_output_shapes
 get_output_types = tf.compat.v1.data.get_output_types
