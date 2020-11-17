@@ -132,11 +132,11 @@ class SeqAttentionBlock(layers.Layer):
           return: (b, t, m, p)
         """
         # Project query, key and value
-        q = tf.einsum('...d,...dp->...p', inp, self.Wq, optimize='optimal') + \
+        q = tf.einsum('...d,...dp->...p', inp, self.Wq, optimize='branch-all') + \
             self.Bq  # (b, t, m, p)
-        k = tf.einsum('...d,...dp->...p', inp, self.Wk, optimize='optimal') + \
+        k = tf.einsum('...d,...dp->...p', inp, self.Wk, optimize='branch-all') + \
             self.Bk  # (b, t, m, p)
-        v = tf.einsum('...d,...dp->...p', inp, self.Wv, optimize='optimal') + \
+        v = tf.einsum('...d,...dp->...p', inp, self.Wv, optimize='branch-all') + \
             self.Bv  # (b, t, m, p)
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
