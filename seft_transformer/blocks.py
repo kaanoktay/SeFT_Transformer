@@ -131,7 +131,6 @@ class SeqAttentionBlock(layers.Layer):
         Output shapes:
           return: (b, t, m, p)
         """
-        """
         # Project query, key and value
         q = tf.einsum('...d,...dp->...p', inp, self.Wq) + \
             self.Bq  # (b, t, m, p)
@@ -139,10 +138,6 @@ class SeqAttentionBlock(layers.Layer):
             self.Bk  # (b, t, m, p)
         v = tf.einsum('...d,...dp->...p', inp, self.Wv) + \
             self.Bv  # (b, t, m, p)
-        """
-        q = inp * tf.constant(1.0)
-        k = inp * tf.constant(1.1)
-        v = inp * tf.constant(1.2)
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
