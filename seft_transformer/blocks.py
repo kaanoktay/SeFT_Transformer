@@ -82,6 +82,10 @@ class SeqAttentionBlock(layers.Layer):
         self.num_head = num_head
         self.embed_dim = proj_dim // num_head
 
+        self.query_dense = layers.Dense(proj_dim)
+        self.key_dense = layers.Dense(proj_dim)
+        self.value_dense = layers.Dense(proj_dim)
+
     def build(self, input_shape):
         # Input shapes
         input_dim = input_shape[-1]
@@ -132,12 +136,17 @@ class SeqAttentionBlock(layers.Layer):
           return: (b, t, m, p)
         """
         # Project query, key and value
+        q = self.query_dense(inp)  # (b, t, m, p)
+        k = self.key_dense(inp)    # (b, t, m, p)
+        v = self.value_dense(inp)  # (b, t, m, p)
+        """
         q = tf.einsum('...d,...dp->...p', inp, self.Wq) + \
             self.Bq  # (b, t, m, p)
         k = tf.einsum('...d,...dp->...p', inp, self.Wk) + \
             self.Bk  # (b, t, m, p)
         v = tf.einsum('...d,...dp->...p', inp, self.Wv) + \
             self.Bv  # (b, t, m, p)
+        """
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
