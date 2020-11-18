@@ -86,47 +86,6 @@ class SeqAttentionBlock(layers.Layer):
         self.key_dense = layers.Dense(proj_dim)
         self.value_dense = layers.Dense(proj_dim)
 
-    def build(self, input_shape):
-        # Input shapes
-        input_dim = input_shape[-1]
-        num_mod = input_shape[-2]
-        # Weight and bias initializers
-        w_init = tf.random_normal_initializer()
-        b_init = tf.zeros_initializer()
-        # Weight matrix and bias: query
-        self.Wq = tf.Variable(
-            initial_value=w_init(
-                shape=(num_mod, input_dim, self.proj_dim), dtype="float32"),
-            trainable=True
-        )
-        self.Bq = tf.Variable(
-            initial_value=b_init(
-                shape=(num_mod, self.proj_dim), dtype="float32"),
-            trainable=True
-        )
-        # Weight matrix and bias: key
-        self.Wk = tf.Variable(
-            initial_value=w_init(
-                shape=(num_mod, input_dim, self.proj_dim), dtype="float32"),
-            trainable=True
-        )
-        self.Bk = tf.Variable(
-            initial_value=b_init(
-                shape=(num_mod, self.proj_dim), dtype="float32"),
-            trainable=True
-        )
-        # Weight matrix and bias: value
-        self.Wv = tf.Variable(
-            initial_value=w_init(
-                shape=(num_mod, input_dim, self.proj_dim), dtype="float32"),
-            trainable=True
-        )
-        self.Bv = tf.Variable(
-            initial_value=b_init(
-                shape=(num_mod, self.proj_dim), dtype="float32"),
-            trainable=True
-        )
-
     def call(self, inp, mask):
         """
         Input shapes:
@@ -139,14 +98,6 @@ class SeqAttentionBlock(layers.Layer):
         q = self.query_dense(inp)  # (b, t, m, p)
         k = self.key_dense(inp)    # (b, t, m, p)
         v = self.value_dense(inp)  # (b, t, m, p)
-        """
-        q = tf.einsum('...d,...dp->...p', inp, self.Wq) + \
-            self.Bq  # (b, t, m, p)
-        k = tf.einsum('...d,...dp->...p', inp, self.Wk) + \
-            self.Bk  # (b, t, m, p)
-        v = tf.einsum('...d,...dp->...p', inp, self.Wv) + \
-            self.Bv  # (b, t, m, p)
-        """
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
