@@ -132,9 +132,9 @@ class SeqAttentionBlock(layers.Layer):
           return: (b, t, m, p)
         """
         # Project query, key and value
-        q = tf.linalg.matvec(Wq, inp) + Bq
-        k = tf.linalg.matvec(Wk, inp) + Bk
-        v = tf.linalg.matvec(Wv, inp) + Bv
+        q = tf.linalg.matvec(self.Wq, inp) + self.Bq
+        k = tf.linalg.matvec(self.Wk, inp) + self.Bk
+        v = tf.linalg.matvec(self.Wv, inp) + self.Bv
         """
         q = tf.einsum('...d,...dp->...p', inp, self.Wq) + \
             self.Bq  # (b, t, m, p)
