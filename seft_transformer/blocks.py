@@ -92,7 +92,7 @@ class SeqAttentionBlock(layers.Layer):
         # Weight matrix and bias: query
         self.Wq = tf.Variable(
             initial_value=w_init(
-                shape=(1, 1, num_mod, self.proj_dim, input_dim), dtype="float32"),
+                shape=(num_mod, self.proj_dim, input_dim), dtype="float32"),
             trainable=True
         )
         self.Bq = tf.Variable(
@@ -103,7 +103,7 @@ class SeqAttentionBlock(layers.Layer):
         # Weight matrix and bias: key
         self.Wk = tf.Variable(
             initial_value=w_init(
-                shape=(1, 1, num_mod, self.proj_dim, input_dim), dtype="float32"),
+                shape=(num_mod, self.proj_dim, input_dim), dtype="float32"),
             trainable=True
         )
         self.Bk = tf.Variable(
@@ -114,7 +114,7 @@ class SeqAttentionBlock(layers.Layer):
         # Weight matrix and bias: value
         self.Wv = tf.Variable(
             initial_value=w_init(
-                shape=(1, 1, num_mod, self.proj_dim, input_dim), dtype="float32"),
+                shape=(num_mod, self.proj_dim, input_dim), dtype="float32"),
             trainable=True
         )
         self.Bv = tf.Variable(
@@ -241,7 +241,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
         # Weight matrix and bias: map proj_dim to data_dim (=enc_dim)
         self.W = tf.Variable(
             initial_value=w_init(
-                shape=(1, 1, num_mod, self.enc_dim, input_dim), dtype="float32"),
+                shape=(num_mod, self.enc_dim, input_dim), dtype="float32"),
             trainable=True
         )
         self.B = tf.Variable(
@@ -288,7 +288,7 @@ class PosFeedforwardBlock(layers.Layer):
         # Weight matrix and bias: 1st feedforward layer
         self.W1 = tf.Variable(
             initial_value=w_init(
-                shape=(1, 1, num_mod, self.ff_dim, input_dim), dtype="float32"),
+                shape=(num_mod, self.ff_dim, input_dim), dtype="float32"),
             trainable=True
         )
         self.B1 = tf.Variable(
@@ -299,7 +299,7 @@ class PosFeedforwardBlock(layers.Layer):
         # Weight matrix and bias: 2nd feedforward layer
         self.W2 = tf.Variable(
             initial_value=w_init(
-                shape=(1, 1, num_mod, self.enc_dim, self.ff_dim), dtype="float32"),
+                shape=(num_mod, self.enc_dim, self.ff_dim), dtype="float32"),
             trainable=True
         )
         self.B2 = tf.Variable(
