@@ -241,7 +241,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
         # Weight matrix and bias: map proj_dim to data_dim (=enc_dim)
         self.W = tf.Variable(
             initial_value=w_init(
-                shape=(num_mod, input_dim, self.enc_dim), dtype="float32"),
+                shape=(1, 1, num_mod, self.enc_dim, input_dim), dtype="float32"),
             trainable=True
         )
         self.B = tf.Variable(
@@ -263,8 +263,11 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
         # Attention over modalities
         out = self.modAttention(inp=out, mask=mask)   # (b, t, m, p)
         # Linear projection to encoding dimension
+        out = tf.linalg.matvec(self.W, out) + self.B
+        """
         out = tf.einsum('...d,...dp->...p', out, self.W) + \
             self.B  # (b, t, m, d)
+        """
         return out
 
 
@@ -315,7 +318,7 @@ class PosFeedforwardBlock(layers.Layer):
         # Positionwise feedforward network
         out = tf.linalg.matvec(self.W1, inp) + self.B1
         out = self.relu(out)
-        out = tf.linalg.matvec(self.W2, inp) + self.B2
+        out = tf.linalg.matvec(self.W2, out) + self.B2
         """
         out = tf.einsum('...p,...pf->...f', inp, self.W1) + \
             self.B1  # (b, t, m, f)
