@@ -285,7 +285,7 @@ class PosFeedforwardBlock(layers.Layer):
         # Weight matrix and bias: 1st feedforward layer
         self.W1 = tf.Variable(
             initial_value=w_init(
-                shape=(num_mod, input_dim, self.ff_dim), dtype="float32"),
+                shape=(1, 1, num_mod, self.ff_dim, input_dim), dtype="float32"),
             trainable=True
         )
         self.B1 = tf.Variable(
@@ -296,7 +296,7 @@ class PosFeedforwardBlock(layers.Layer):
         # Weight matrix and bias: 2nd feedforward layer
         self.W2 = tf.Variable(
             initial_value=w_init(
-                shape=(num_mod, self.ff_dim, self.enc_dim), dtype="float32"),
+                shape=(1, 1, num_mod, self.enc_dim, self.ff_dim), dtype="float32"),
             trainable=True
         )
         self.B2 = tf.Variable(
@@ -313,9 +313,14 @@ class PosFeedforwardBlock(layers.Layer):
           return: (b, t, m, d)
         """
         # Positionwise feedforward network
+        out = tf.linalg.matvec(self.W1, inp) + self.B1
+        out = self.relu(out)
+        out = tf.linalg.matvec(self.W2, inp) + self.B2
+        """
         out = tf.einsum('...p,...pf->...f', inp, self.W1) + \
             self.B1  # (b, t, m, f)
         out = self.relu(out)
         out = tf.einsum('...f,...fd->...d', out, self.W2) + \
             self.B2  # (b, t, m, d)
+        """
         return out
