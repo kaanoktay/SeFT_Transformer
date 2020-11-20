@@ -37,9 +37,6 @@ class TimeSeriesTransformer(keras.Model):
         time = inputs[1]  # (b, t)
         inp = inputs[2]  # (b, t, m)
         mask = inputs[3]  # (b, t, m)
-        length = inputs[4]  # (b, )
-        # Squeeze length
-        length = tf.squeeze(length)  # (b)
         # Expand input dimensions if necessary
         if len(inp.shape) == 3:
             inp = rearrange(inp, 'b t m -> b t m 1')
@@ -48,5 +45,5 @@ class TimeSeriesTransformer(keras.Model):
         # Calculate attention
         attn = self.transformer_encoder(enc_inp, mask)  # (b, t, m, d)
         # Make prediction
-        pred = self.class_prediction(attn, mask, length)  # (b, 1)
+        pred = self.class_prediction(attn, mask)  # (b, 1)
         return pred

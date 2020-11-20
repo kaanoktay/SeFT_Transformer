@@ -78,26 +78,22 @@ class ClassPredictionLayer(layers.Layer):
         self.densePred1 = layers.Dense(self.ff_dim, activation='relu')
         self.densePred2 = layers.Dense(1, activation='sigmoid')
 
-    def call(self, inp, mask, length):
+    def call(self, inp, mask):
         """Predict class.
 
         Input shapes:
           inp:  (b, t, m, d)
           mask: (b, t, m)
-          length: (b)
         Output shapes:
           return: (b, 1)
         """
         # TODO(Max): I'm not sure if this two stage aggregation is ideal.
-        # Mask the padded values
+        # Mask the padded values with 0's
         if mask is not None:
             mask = rearrange(mask, 'b t m -> b t m 1')
             inp = tf.where(mask, inp, 0)
-        #out = tf.boolean_mask(inp, mask)  # (b, t_r, d, 1)
-        # Calculate mean over the timesteps
+        # Calculate sum over the timesteps
         out = reduce(inp, 'b t m d -> b d m', 'sum')
-        length = tf.cast(length, dtype="float32")
-        out = out 
         # Aggregate the modalities
         out = self.denseMod(out)  # (b, d, 1)
         out = rearrange(out, 'b d 1 -> b d')  # (b, d)
