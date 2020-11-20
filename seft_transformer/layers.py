@@ -97,7 +97,7 @@ class ClassPredictionLayer(layers.Layer):
         # Calculate mean over the timesteps
         out = reduce(inp, 'b t m d -> b d m', 'sum')
         length = tf.cast(length, dtype="float32")
-        out = out / rearrange(length, 'b -> b 1 1')
+        out = out 
         # Aggregate the modalities
         out = self.denseMod(out)  # (b, d, 1)
         out = rearrange(out, 'b d 1 -> b d')  # (b, d)
