@@ -135,14 +135,6 @@ class SeqAttentionBlock(layers.Layer):
         q = tf.linalg.matvec(self.Wq, inp) + self.Bq
         k = tf.linalg.matvec(self.Wk, inp) + self.Bk
         v = tf.linalg.matvec(self.Wv, inp) + self.Bv
-        """
-        q = tf.einsum('...d,...dp->...p', inp, self.Wq) + \
-            self.Bq  # (b, t, m, p)
-        k = tf.einsum('...d,...dp->...p', inp, self.Wk) + \
-            self.Bk  # (b, t, m, p)
-        v = tf.einsum('...d,...dp->...p', inp, self.Wv) + \
-            self.Bv  # (b, t, m, p)
-        """
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
@@ -264,10 +256,6 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
         out = self.modAttention(inp=out, mask=mask)   # (b, t, m, p)
         # Linear projection to encoding dimension
         out = tf.linalg.matvec(self.W, out) + self.B
-        """
-        out = tf.einsum('...d,...dp->...p', out, self.W) + \
-            self.B  # (b, t, m, d)
-        """
         return out
 
 
@@ -319,11 +307,4 @@ class PosFeedforwardBlock(layers.Layer):
         out = tf.linalg.matvec(self.W1, inp) + self.B1
         out = self.relu(out)
         out = tf.linalg.matvec(self.W2, out) + self.B2
-        """
-        out = tf.einsum('...p,...pf->...f', inp, self.W1) + \
-            self.B1  # (b, t, m, f)
-        out = self.relu(out)
-        out = tf.einsum('...f,...fd->...d', out, self.W2) + \
-            self.B2  # (b, t, m, d)
-        """
         return out

@@ -1,5 +1,6 @@
 """Implementation of Layers used by Keras models."""
 from tensorflow.keras import layers
+import tensorflow as tf
 from einops import rearrange, reduce
 
 from .blocks import (
@@ -54,9 +55,10 @@ class AxialAttentionEncoderLayer(layers.Layer):
         Output shapes:
           return: (b, t, m, d)
         """
-        # Project query, key and value
+        # Calculate attention and apply layer norm
         attn = self.axAttention(inp, mask)  # (b, t, m, d)
         attn_out = self.layerNorm1(inp + attn)  # (b, t, m, d)
+        # Calculate positionwise feedforward and apply layer norm
         ffn = self.posFeedforward(attn_out)  # (b, t, m, d)
         ffn_out = self.layerNorm2(attn_out + ffn)  # (b, t, m, d)
         return ffn_out
@@ -71,26 +73,34 @@ class ClassPredictionLayer(layers.Layer):
 
     def build(self, input_shape):
         # Dense layer to aggregate different modalities
-        self.denseMod = layers.Dense(1, activation='relu')
+        self.denseMod = layers.Dense(1)
         # Dense layers to predict classes
         self.densePred1 = layers.Dense(self.ff_dim, activation='relu')
         self.densePred2 = layers.Dense(1, activation='sigmoid')
 
-    def call(self, inp):
+    def call(self, inp, mask, length):
         """Predict class.
 
         Input shapes:
           inp:  (b, t, m, d)
+          mask: (b, t, m)
+          length: (b)
         Output shapes:
           return: (b, 1)
         """
         # TODO(Max): I'm not sure if this two stage aggregation is ideal.
-        # Further, it looks like you are also aggregating values which are from
-        # non-observed elements (padding). This is problematic, as the norm of
-        # you output is then dependent on the batch size, which we usually
-        # don't want.
-        out = reduce(inp, 'b t m d -> b d m', 'mean')
+        # Mask the padded values
+        if mask is not None:
+            mask = rearrange(mask, 'b t m -> b t m 1')
+            inp = tf.where(mask, inp, 0)
+        #out = tf.boolean_mask(inp, mask)  # (b, t_r, d, 1)
+        # Calculate mean over the timesteps
+        out = reduce(inp, 'b t m d -> b d m', 'sum')
+        length = tf.cast(length, dtype="float32")
+        out = out / rearrange(length, 'b -> b 1 1')
+        # Aggregate the modalities
         out = self.denseMod(out)  # (b, d, 1)
         out = rearrange(out, 'b d 1 -> b d')  # (b, d)
+        # Map to the class
         pred = self.densePred2(self.densePred1(out))  # (b, 1)
         return pred
