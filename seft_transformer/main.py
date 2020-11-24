@@ -76,16 +76,16 @@ def main():
 
     # Callback for reducing the learning rate when the model get stuck in a plateau
     lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
-        monitor='val_auprc',
-        mode='max',
+        monitor='loss',
+        mode='min',
         factor=lr_decay_rate,
         patience=lr_decay_patience,
         min_lr=0.0001
     )
 
     early_stopping_callback = keras.callbacks.EarlyStopping(
-        monitor='val_auprc',
-        mode='max',
+        monitor='val_loss',
+        mode='min',
         patience=5,
         restore_best_weights=True
     )
@@ -94,8 +94,8 @@ def main():
     model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_filepath,
         save_weights_only=True,
-        monitor='val_auprc',
-        mode='max',
+        monitor='val_loss',
+        mode='min',
         save_best_only=True
     )
 
