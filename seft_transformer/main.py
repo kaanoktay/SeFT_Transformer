@@ -21,22 +21,10 @@ def parse_arguments():
         description='Embedding Translational Equivariance to SeFT')
     parser.add_argument('--batch_size', type=int, default=16,
                         metavar="16", help='batch size')
-    parser.add_argument('--points_per_hour', type=int, default=30,
-                        metavar="30", help='points per hour for the grid')
     parser.add_argument('--num_epochs', type=int, default=10,
                         metavar="10", help='number of epochs')
     parser.add_argument('--init_learning_rate', type=float,
                         default=0.001, metavar="0.001", help='initial learning rate')
-    parser.add_argument('--kernel_size', type=int, default=5,
-                        metavar="5", help='kernel size of the convolutional layers')
-    parser.add_argument('--dilation_rate', type=int, default=2,
-                        metavar="2", help='dilation rate of the convolutional layers')
-    parser.add_argument('--filter_size', type=int, default=64, metavar="64",
-                        help='filter size of the first convolutional layer')
-    parser.add_argument('--dropout_rate_conv', type=float, default=0.2,
-                        metavar="0.2", help='dropout rate of the convolutional layers')
-    parser.add_argument('--dropout_rate_dense', type=float, default=0.2,
-                        metavar="0.2", help='dropout rate of the dense layers')
     parser.add_argument('--lr_decay_patience', type=int, default=2, metavar="2",
                         help='number of unimproving epochs after which learning rate decays')
     parser.add_argument('--lr_decay_rate', type=float, default=0.2,
