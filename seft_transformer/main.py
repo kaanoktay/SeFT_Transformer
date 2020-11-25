@@ -21,8 +21,8 @@ def parse_arguments():
         description='Embedding Translational Equivariance to SeFT')
     parser.add_argument('--batch_size', type=int, default=16,
                         metavar="16", help='batch size')
-    parser.add_argument('--num_epochs', type=int, default=50,
-                        metavar="50", help='number of epochs')
+    parser.add_argument('--num_epochs', type=int, default=100,
+                        metavar="100", help='number of epochs')
     parser.add_argument('--init_learning_rate', type=float, default=1e-3,
                         metavar="1e-3", help='initial learning rate')
     parser.add_argument('--lr_decay_rate', type=float, default=0.5,
