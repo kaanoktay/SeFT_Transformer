@@ -25,8 +25,6 @@ def parse_arguments():
                         metavar="40", help='number of epochs')
     parser.add_argument('--init_learning_rate', type=float, default=1e-3,
                         metavar="0.001", help='initial learning rate')
-    parser.add_argument('--lr_decay_patience', type=int, default=5, metavar="5",
-                        help='number of unimproving epochs after which learning rate decays')
     parser.add_argument('--lr_decay_rate', type=float, default=0.5,
                         metavar="0.5", help='decay rate of learning rate')
     return parser.parse_args()
@@ -40,7 +38,6 @@ def main():
     batch_size = args.batch_size  # Default: 16
     num_epochs = args.num_epochs  # Default: 10
     init_learning_rate = args.init_learning_rate  # Default: 1e-3
-    lr_decay_patience = args.lr_decay_patience  # Default: 2
     lr_decay_rate = args.lr_decay_rate  # Default: 0.2
 
     # Load data (epochs don't matter because we iterate over the dataset
@@ -79,14 +76,14 @@ def main():
         monitor='loss',
         mode='min',
         factor=lr_decay_rate,
-        patience=lr_decay_patience,
-        min_lr=1e-5
+        patience=3,
+        min_lr=1e-6
     )
 
     early_stopping_callback = keras.callbacks.EarlyStopping(
         monitor='val_loss',
         mode='min',
-        patience=5,
+        patience=10,
         restore_best_weights=True
     )
 
