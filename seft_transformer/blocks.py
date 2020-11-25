@@ -53,7 +53,7 @@ class InpEncodingBlock(layers.Layer):
         # Weight matrix and bias: input data encoding
         self.W = tf.Variable(
             initial_value=w_init(
-                shape=(num_mod, input_dim, self.enc_dim), dtype="float32"),
+                shape=(num_mod, self.enc_dim, input_dim), dtype="float32"),
             trainable=True
         )
         self.B = tf.Variable(
@@ -70,8 +70,7 @@ class InpEncodingBlock(layers.Layer):
           return: (b, t, m, d)
         """
         # Calculate input data encodings
-        inp_enc = tf.einsum('...i,...id->...d', inp,
-                            self.W) + self.B  # (b, t, m, d)
+        inp_enc = tf.linalg.matvec(self.W, inp) + self.B  # (b, t, m, d)
         return inp_enc
 
 

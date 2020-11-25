@@ -22,13 +22,13 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=16,
                         metavar="16", help='batch size')
     parser.add_argument('--num_epochs', type=int, default=10,
-                        metavar="10", help='number of epochs')
-    parser.add_argument('--init_learning_rate', type=float,
-                        default=0.001, metavar="0.001", help='initial learning rate')
-    parser.add_argument('--lr_decay_patience', type=int, default=2, metavar="2",
+                        metavar="40", help='number of epochs')
+    parser.add_argument('--init_learning_rate', type=float, default=1e-3,
+                        metavar="0.001", help='initial learning rate')
+    parser.add_argument('--lr_decay_patience', type=int, default=5, metavar="5",
                         help='number of unimproving epochs after which learning rate decays')
-    parser.add_argument('--lr_decay_rate', type=float, default=0.2,
-                        metavar="0.2", help='decay rate of learning rate')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.5,
+                        metavar="0.5", help='decay rate of learning rate')
     return parser.parse_args()
 
 
@@ -62,7 +62,7 @@ def main():
     # Loss function
     loss_fn = keras.losses.BinaryCrossentropy(
         from_logits=False,
-        name="Loss"
+        name="loss"
     )
 
     # Compile the model
@@ -80,7 +80,7 @@ def main():
         mode='min',
         factor=lr_decay_rate,
         patience=lr_decay_patience,
-        min_lr=0.0001
+        min_lr=1e-5
     )
 
     early_stopping_callback = keras.callbacks.EarlyStopping(

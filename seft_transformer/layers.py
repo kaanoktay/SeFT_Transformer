@@ -87,16 +87,16 @@ class ClassPredictionLayer(layers.Layer):
         Output shapes:
           return: (b, 1)
         """
-        # TODO(Max): I'm not sure if this two stage aggregation is ideal.
         # Mask the padded values with 0's
         if mask is not None:
             mask = rearrange(mask, 'b t m -> b t m 1')
             inp = tf.where(mask, inp, 0)
-        # Calculate sum over the timesteps
-        out = reduce(inp, 'b t m d -> b d m', 'sum')
-        # Aggregate the modalities
-        out = self.denseMod(out)  # (b, d, 1)
-        out = rearrange(out, 'b d 1 -> b d')  # (b, d)
-        # Map to the class
+        # Calculate sum over the timesteps and modalities
+        out = reduce(inp, 'b t m d -> b d', 'sum')
+        # Normalize the sum
+        mask = tf.cast(mask, dtype='float32')
+        norm = reduce(mask, 'b t m 1-> b 1', 'sum')
+        out = out / norm
+        # Predict the class
         pred = self.densePred2(self.densePred1(out))  # (b, 1)
         return pred
