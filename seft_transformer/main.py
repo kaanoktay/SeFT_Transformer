@@ -10,6 +10,7 @@ from .models import TimeSeriesTransformer
 
 tf.executing_eagerly()
 checkpoint_filepath = './checkpoints/cp.ckpt'
+logs_directory = "./logs"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.random.set_seed(0)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
@@ -71,7 +72,7 @@ def main():
                  keras.metrics.AUC(curve="ROC", name="auroc")]
     )
 
-    # Callback for reducing the learning rate when the model get stuck in a plateau
+    # Callback for reducing the learning rate when loss get stuck in a plateau
     lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
         monitor='loss',
         mode='min',
@@ -80,6 +81,7 @@ def main():
         min_lr=1e-6
     )
 
+    # Callback for early stopping when val_loss does not improve anymore
     early_stopping_callback = keras.callbacks.EarlyStopping(
         monitor='val_loss',
         mode='min',
@@ -96,6 +98,11 @@ def main():
         save_best_only=True
     )
 
+    # Callback for Tensorboard logging
+    tensorboard_callback = keras.callbacks.TensorBoard(
+        log_dir=logs_directory
+    )
+
     # Fit the model to the input data
     print("\n------- Training and Validation -------")
     model.fit(
@@ -108,7 +115,8 @@ def main():
         verbose=1,
         callbacks=[model_checkpoint_callback,
                    lr_schedule_callback,
-                   early_stopping_callback]
+                   early_stopping_callback,
+                   tensorboard_callback]
     )
 
     print("\n------- Test -------")
