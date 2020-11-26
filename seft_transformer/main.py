@@ -100,7 +100,8 @@ def main():
 
     # Callback for Tensorboard logging
     tensorboard_callback = keras.callbacks.TensorBoard(
-        log_dir=logs_directory
+        log_dir=logs_directory,
+        profile_batch='10, 15'
     )
 
     # Fit the model to the input data
