@@ -115,7 +115,6 @@ def main():
         verbose=1,
         callbacks=[model_checkpoint_callback,
                    lr_schedule_callback,
-                   early_stopping_callback,
                    tensorboard_callback]
     )
 
