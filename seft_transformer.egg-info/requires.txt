@@ -1,5 +1,5 @@
 einops<0.4.0,>=0.3.0
-medical-ts-datasets
+medical-ts-datasets==0.1.0
 numpy<2.0.0,>=1.18.3
 opt-einsum==3.3.0
 scikit-learn<0.23.0,>=0.22.2
