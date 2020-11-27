@@ -24,10 +24,10 @@ def parse_arguments():
                         metavar="16", help='batch size')
     parser.add_argument('--num_epochs', type=int, default=100,
                         metavar="100", help='number of epochs')
-    parser.add_argument('--init_learning_rate', type=float, default=1e-3,
-                        metavar="1e-3", help='initial learning rate')
-    parser.add_argument('--lr_decay_rate', type=float, default=0.5,
-                        metavar="0.5", help='decay rate of learning rate')
+    parser.add_argument('--init_learning_rate', type=float, default=1e-4,
+                        metavar="1e-4", help='initial learning rate')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.2,
+                        metavar="0.2", help='decay rate of learning rate')
     return parser.parse_args()
 
 
@@ -77,15 +77,15 @@ def main():
         monitor='loss',
         mode='min',
         factor=lr_decay_rate,
-        patience=3,
-        min_lr=1e-6
+        patience=8,
+        min_lr=1e-7
     )
 
     # Callback for early stopping when val_loss does not improve anymore
     early_stopping_callback = keras.callbacks.EarlyStopping(
         monitor='val_loss',
         mode='min',
-        patience=10,
+        patience=8,
         restore_best_weights=True
     )
 
