@@ -10,7 +10,7 @@ from .models import TimeSeriesTransformer
 
 tf.executing_eagerly()
 checkpoint_filepath = './checkpoints/cp.ckpt'
-logs_directory = "./logs"
+log_dir = "./logs"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.random.set_seed(0)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
@@ -40,6 +40,12 @@ def main():
     num_epochs = args.num_epochs  # Default: 10
     init_learning_rate = args.init_learning_rate  # Default: 1e-3
     lr_decay_rate = args.lr_decay_rate  # Default: 0.2
+
+    # Experiment logs folder
+    experiment_log = os.path.join(
+        log_dir, 
+        "ex_bs_"+str(batch_size) + "_initLr_" + str(batch_size)
+    )
 
     # Load data (epochs don't matter because we iterate over the dataset
     # indefinitely)
@@ -100,8 +106,8 @@ def main():
 
     # Callback for Tensorboard logging
     tensorboard_callback = keras.callbacks.TensorBoard(
-        log_dir=logs_directory,
-        profile_batch='300, 305'
+        log_dir=experiment_log,
+        profile_batch='100, 105'
     )
 
     # Fit the model to the input data
