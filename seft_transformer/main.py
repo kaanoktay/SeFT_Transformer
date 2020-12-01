@@ -44,7 +44,10 @@ def main():
     # Experiment logs folder
     experiment_log = os.path.join(
         log_dir, 
-        "ex_bs_" + str(batch_size) + "_initLr_" + str(init_learning_rate)
+        "ex_bS_" + str(batch_size) + 
+        "_nE_" + str(num_epochs) +
+        "_iLr_" + str(init_learning_rate) +
+        "_lrD_" + str(lr_decay_rate)
     )
 
     # Load data (epochs don't matter because we iterate over the dataset
