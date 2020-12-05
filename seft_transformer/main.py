@@ -2,11 +2,12 @@
 import argparse
 import os
 import tensorflow as tf
+import pdb
 from tensorflow import keras
 
 from .training_utils import Preprocessing
-
 from .models import TimeSeriesTransformer
+from .misc import WarmUpScheduler, LrLogger
 
 tf.executing_eagerly()
 checkpoint_filepath = './checkpoints/cp.ckpt'
@@ -50,6 +51,9 @@ def main():
         "_lrD_" + str(lr_decay_rate)
     )
 
+    file_writer = tf.summary.create_file_writer(experiment_log + "/metrics")
+    file_writer.set_as_default()
+
     # Load data (epochs don't matter because we iterate over the dataset
     # indefinitely)
     transformation = Preprocessing(
@@ -59,7 +63,8 @@ def main():
 
     # Initialize the model
     model = TimeSeriesTransformer(
-        proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128, pred_ff_dim=32)
+        proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128, pred_ff_dim=32
+    )
 
     # Optimizer function
     opt = keras.optimizers.Adam(
@@ -125,7 +130,8 @@ def main():
         verbose=1,
         callbacks=[model_checkpoint_callback,
                    lr_schedule_callback,
-                   tensorboard_callback]
+                   tensorboard_callback,
+                   LrLogger()]
     )
 
     print("\n------- Test -------")
