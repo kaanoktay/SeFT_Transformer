@@ -41,9 +41,8 @@ class WarmUpScheduler(tf.keras.callbacks.Callback):
 
 
 class LearningRateLogger(tf.keras.callbacks.Callback):
-    def on_epoch_end(self, epoch, logs=None):
+    def on_epoch_begin(self, epoch, logs=None):
         tf.summary.scalar(
             name='learning rate', 
-            data=tf.keras.backend.get_value(self.model.optimizer.lr), 
+            data=self.model.optimizer.lr, 
             step=epoch)
-        #file_writer.flush()
