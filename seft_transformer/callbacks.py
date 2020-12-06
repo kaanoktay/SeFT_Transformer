@@ -12,7 +12,7 @@ class WarmUpScheduler(tf.keras.callbacks.Callback):
             warmup_steps: Number of warmup steps. (default: 0)
             verbose: 0 -> quiet, 1 -> update messages. (default: {0})
         """
-        super().__init__()
+        super(WarmUpScheduler, self).__init__()
         self.final_lr = final_lr
         self.warmup_learning_rate = warmup_learning_rate
         self.warmup_steps = warmup_steps
@@ -32,17 +32,14 @@ class WarmUpScheduler(tf.keras.callbacks.Callback):
                 (self.final_lr - self.warmup_learning_rate) / self.warmup_steps
             new_lr = self.warmup_learning_rate + (increase * self.global_step)
             tf.keras.backend.set_value(self.model.optimizer.lr, new_lr)
-            if self.verbose > 0:
-                print(
-                    f'Warmup - learning rate: '
-                    f'{new_lr:.6f}/{self.final_lr:.6f}',
-                    end=''
-                )
 
 
 class LearningRateLogger(tf.keras.callbacks.Callback):
-    def on_epoch_begin(self, epoch, logs=None):
+    def __init__(self):
+        super(LearningRateLogger, self).__init__()
+    def on_batch_begin(self, epoch, logs=None):
         tf.summary.scalar(
             name='learning rate', 
             data=self.model.optimizer.lr, 
-            step=epoch)
+            step=epoch
+        )
