@@ -30,17 +30,22 @@ class WarmUpScheduler(tf.keras.callbacks.Callback):
 class LearningRateLogger(tf.keras.callbacks.Callback):
     def __init__(self):
         super(LearningRateLogger, self).__init__()
+        self.global_step = 1
 
     def on_train_batch_begin(self, batch, logs=None):
-        tf.summary.scalar(
-            name='learning rate at batch', 
-            data=tf.keras.backend.get_value(self.model.optimizer.lr), 
-            step=batch
-        )
+        if self.global_step == 1:
+            tf.summary.scalar(
+                name='learning rate in first epoch', 
+                data=tf.keras.backend.get_value(self.model.optimizer.lr), 
+                step=batch
+            )
 
     def on_epoch_begin(self, epoch, logs=None):
         tf.summary.scalar(
-            name='learning rate at epoch', 
+            name='learning rate', 
             data=tf.keras.backend.get_value(self.model.optimizer.lr), 
             step=epoch
         )
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.global_step += 1

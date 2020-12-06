@@ -39,7 +39,7 @@ def main():
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
     num_epochs = args.num_epochs  # Default: 10
-    init_learning_rate = args.init_learning_rate  # Default: 1e-3
+    init_learning_rate = args.init_learning_rate  # Default: 1e-4
     lr_decay_rate = args.lr_decay_rate  # Default: 0.2
 
     # Experiment logs folder
