@@ -137,9 +137,10 @@ def main():
         validation_data=val_iter,
         validation_steps=val_steps-1,
         verbose=1,
-        callbacks=[model_checkpoint_callback,
+        callbacks=[tensorboard_callback,
+                   model_checkpoint_callback,
                    lr_schedule_callback,
-                   tensorboard_callback,
+                   lr_warmup_callback,
                    lr_logger_callback]
     )
 
