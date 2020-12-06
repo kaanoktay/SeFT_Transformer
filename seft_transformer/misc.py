@@ -40,7 +40,7 @@ class WarmUpScheduler(tf.keras.callbacks.Callback):
                 )
 
 
-class LrLogger(tf.keras.callbacks.Callback):
+class LearningRateLogger(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         tf.summary.scalar(
             name='learning rate', 
