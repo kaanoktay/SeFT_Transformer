@@ -87,8 +87,8 @@ def main():
     )
 
     # Callback for loggin the learning rate for inspection
-    lr_logging_callback = LearningRateLogger()
-    
+    lr_logger_callback = LearningRateLogger()
+
     # Callback for reducing the learning rate when loss get stuck in a plateau
     lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
         monitor='loss',
@@ -134,7 +134,7 @@ def main():
         callbacks=[model_checkpoint_callback,
                    lr_schedule_callback,
                    tensorboard_callback,
-                   LrLogger()]
+                   lr_logger_callback]
     )
 
     print("\n------- Test -------")
