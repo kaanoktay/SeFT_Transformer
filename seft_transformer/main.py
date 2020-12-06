@@ -7,7 +7,7 @@ from tensorflow import keras
 
 from .training_utils import Preprocessing
 from .models import TimeSeriesTransformer
-from .misc import WarmUpScheduler, LrLogger
+from .misc import WarmUpScheduler, LearningRateLogger
 
 tf.executing_eagerly()
 checkpoint_filepath = './checkpoints/cp.ckpt'
@@ -86,12 +86,15 @@ def main():
                  keras.metrics.AUC(curve="ROC", name="auroc")]
     )
 
+    # Callback for loggin the learning rate for inspection
+    lr_logging_callback = LearningRateLogger()
+    
     # Callback for reducing the learning rate when loss get stuck in a plateau
     lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
         monitor='loss',
         mode='min',
         factor=lr_decay_rate,
-        patience=8,
+        patience=2,
         min_lr=1e-7
     )
 
@@ -115,7 +118,7 @@ def main():
     # Callback for Tensorboard logging
     tensorboard_callback = keras.callbacks.TensorBoard(
         log_dir=experiment_log,
-        profile_batch='100, 105'
+        profile_batch='180, 185'
     )
 
     # Fit the model to the input data
