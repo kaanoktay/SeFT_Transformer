@@ -9,13 +9,13 @@ from .training_utils import Preprocessing
 from .models import TimeSeriesTransformer
 from .callbacks import WarmUpScheduler, LearningRateLogger
 
+
 tf.executing_eagerly()
 checkpoint_filepath = './checkpoints/cp.ckpt'
 log_dir = "./logs"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.random.set_seed(0)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
-
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -27,10 +27,9 @@ def parse_arguments():
                         metavar="100", help='number of epochs')
     parser.add_argument('--init_learning_rate', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_decay_rate', type=float, default=0.2,
-                        metavar="0.2", help='decay rate of learning rate')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.5,
+                        metavar="0.5", help='decay rate of learning rate')
     return parser.parse_args()
-
 
 def main():
     """Parse command line arguments and train model."""
@@ -38,9 +37,9 @@ def main():
 
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
-    num_epochs = args.num_epochs  # Default: 10
+    num_epochs = args.num_epochs  # Default: 100
     init_learning_rate = args.init_learning_rate  # Default: 1e-4
-    lr_decay_rate = args.lr_decay_rate  # Default: 0.2
+    lr_decay_rate = args.lr_decay_rate  # Default: 0.5
 
     # Experiment logs folder
     experiment_log = os.path.join(
@@ -51,7 +50,8 @@ def main():
         "_lrD_" + str(lr_decay_rate)
     )
 
-    file_writer = tf.summary.create_file_writer(experiment_log + "/metrics")
+    # File to log variables e.g. learning rate
+    file_writer = tf.summary.create_file_writer(experiment_log + "/variables")
     file_writer.set_as_default()
 
     # Load data (epochs don't matter because we iterate over the dataset
@@ -92,7 +92,7 @@ def main():
     # Callback for warmup scheduler
     lr_warmup_callback = WarmUpScheduler(
         final_lr=init_learning_rate,
-        warmup_steps=50
+        warmup_steps=100
     )
 
     # Callback for reducing the learning rate when loss get stuck in a plateau
@@ -100,15 +100,15 @@ def main():
         monitor='loss',
         mode='min',
         factor=lr_decay_rate,
-        patience=2,
-        min_lr=1e-10
+        patience=5,
+        min_lr=1e-8
     )
 
     # Callback for early stopping when val_loss does not improve anymore
     early_stopping_callback = keras.callbacks.EarlyStopping(
         monitor='val_loss',
         mode='min',
-        patience=8,
+        patience=20,
         restore_best_weights=True
     )
 
@@ -152,7 +152,6 @@ def main():
         verbose=1
     )
     print("\n")
-
 
 if __name__ == "__main__":
     main()

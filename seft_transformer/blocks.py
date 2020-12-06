@@ -6,7 +6,6 @@ import numpy as np
 
 class PosEncodingBlock(layers.Layer):
     """Layer for the computation of positional encodings."""
-
     def __init__(self, enc_dim=128):
         super(PosEncodingBlock, self).__init__()
         self.f = tf.math.exp(
