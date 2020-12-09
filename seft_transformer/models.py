@@ -14,16 +14,18 @@ class TimeSeriesTransformer(keras.Model):
     """Time Series Transformer model."""
 
     def __init__(self, proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128,
-                 pred_ff_dim=32):
-        super().__init__()
+                 pred_ff_dim=32, drop_rate=0.1):
+        super(TimeSeriesTransformer, self).__init__()
         self.input_embedding = InputEmbedding(
             enc_dim=enc_dim
         )
         self.transformer_encoder = AxialAttentionEncoderLayer(
             proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
-            ff_dim=pos_ff_dim
+            ff_dim=pos_ff_dim, drop_rate=drop_rate
         )
-        self.class_prediction = ClassPredictionLayer(ff_dim=pred_ff_dim)
+        self.class_prediction = ClassPredictionLayer(
+            ff_dim=pred_ff_dim
+        )
 
     def call(self, inputs):
         """Apply model to data.

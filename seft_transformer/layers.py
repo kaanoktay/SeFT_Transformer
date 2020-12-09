@@ -33,12 +33,12 @@ class InputEmbedding(layers.Layer):
 
 
 class AxialAttentionEncoderLayer(layers.Layer):
-    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, ff_dim=128):
+    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
+                 ff_dim=128, drop_rate=0.1):
         super(AxialAttentionEncoderLayer, self).__init__()
         self.axAttention = AxialMultiHeadAttentionBlock(
-            proj_dim=proj_dim,
-            enc_dim=enc_dim,
-            num_head=num_head
+            proj_dim=proj_dim, enc_dim=enc_dim,
+            num_head=num_head, drop_rate=drop_rate
         )
         self.posFeedforward = PosFeedforwardBlock(
             enc_dim=enc_dim,

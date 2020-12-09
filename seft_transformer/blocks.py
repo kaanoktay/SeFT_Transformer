@@ -74,11 +74,12 @@ class InpEncodingBlock(layers.Layer):
 
 
 class SeqAttentionBlock(layers.Layer):
-    def __init__(self, proj_dim=128, num_head=4):
+    def __init__(self, proj_dim=128, num_head=4, drop_rate=0.1):
         super().__init__()
         self.proj_dim = proj_dim
         self.num_head = num_head
         self.embed_dim = proj_dim // num_head
+        self.dropout = layers.Dropout(drop_rate)
 
     def build(self, input_shape):
         # Input shapes
@@ -154,19 +155,22 @@ class SeqAttentionBlock(layers.Layer):
             tensor=weight,
             message="Check the values after softmax"
         )
-        output = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, m, h, t, e)
+        #Apply dropout
+        weight = self.dropout(weight)
+        out = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, m, h, t, e)
         # Concatenate heads
-        concat_output = rearrange(
-            output, 'b m h t e -> b t m (h e)')  # (b, t, m, p)
-        return concat_output
+        concat_out = rearrange(
+            out, 'b m h t e -> b t m (h e)')  # (b, t, m, p)
+        return concat_out
 
 
 class ModAttentionBlock(layers.Layer):
-    def __init__(self, proj_dim=128, num_head=4):
+    def __init__(self, proj_dim=128, num_head=4, drop_rate=0.1):
         super().__init__()
         self.proj_dim = proj_dim
         self.num_head = num_head
         self.embed_dim = proj_dim // num_head
+        self.dropout = layers.Dropout(drop_rate)
 
         self.query_dense = layers.Dense(proj_dim)
         self.key_dense = layers.Dense(proj_dim)
@@ -205,20 +209,22 @@ class ModAttentionBlock(layers.Layer):
             tensor=weight,
             message="Check the values after softmax"
         )
-        output = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, t, h, m, e)
+        #Apply dropout
+        weight = self.dropout(weight)
+        out = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, t, h, m, e)
         # Concatenate heads
-        concat_output = rearrange(
-            output, 'b t h m e -> b t m (h e)')  # (b, t, m, p)
-        return concat_output
+        concat_out = rearrange(
+            out, 'b t h m e -> b t m (h e)')  # (b, t, m, p)
+        return concat_out
 
 
 class AxialMultiHeadAttentionBlock(layers.Layer):
-    def __init__(self, proj_dim=128, enc_dim=128, num_head=4):
+    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, drop_rate=0.1):
         super().__init__()
         self.seqAttention = SeqAttentionBlock(
-            proj_dim=proj_dim, num_head=num_head)
+            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate)
         self.modAttention = ModAttentionBlock(
-            proj_dim=proj_dim, num_head=num_head)
+            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate)
         self.enc_dim = enc_dim
 
     def build(self, input_shape):

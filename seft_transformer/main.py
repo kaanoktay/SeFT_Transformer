@@ -27,8 +27,14 @@ def parse_arguments():
                         metavar="100", help='number of epochs')
     parser.add_argument('--init_learning_rate', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_decay_rate', type=float, default=0.5,
-                        metavar="0.5", help='decay rate of learning rate')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.25,
+                        metavar="0.25", help='decay rate of learning rate')
+    parser.add_argument('--lr_warmup_steps', type=float, default=1e3,
+                        metavar="1e3", help='learning rate warmup steps')
+    parser.add_argument('--dropout_rate', type=float, default=0.1,
+                        metavar="0.1", help='dropout rate')
+    parser.add_argument('--skip_connection', type=str, default="layer_norm",
+                        metavar="layer_norm", help='type of skip connection')                        
     return parser.parse_args()
 
 def main():
@@ -39,15 +45,17 @@ def main():
     batch_size = args.batch_size  # Default: 16
     num_epochs = args.num_epochs  # Default: 100
     init_learning_rate = args.init_learning_rate  # Default: 1e-4
-    lr_decay_rate = args.lr_decay_rate  # Default: 0.5
+    lr_decay_rate = args.lr_decay_rate  # Default: 0.25
+    lr_warmup_steps = args.lr_warmup_steps # Default: 1e3
+    dropout_rate = args.dropout_rate # Default: 0.1
+    skip_connection_type = args.skip_connection # Default: "layer_norm"
 
     # Experiment logs folder
     experiment_log = os.path.join(
-        log_dir, 
-        "ex_bS_" + str(batch_size) + 
-        "_nE_" + str(num_epochs) +
-        "_iLr_" + str(init_learning_rate) +
-        "_lrD_" + str(lr_decay_rate)
+        log_dir,
+        "ex_initLr_" + str(init_learning_rate) +
+        "_dropRate_" + str(dropout_rate) +
+        "_warmSteps_" + str(lr_warmup_steps)
     )
 
     # File to log variables e.g. learning rate
@@ -63,7 +71,8 @@ def main():
 
     # Initialize the model
     model = TimeSeriesTransformer(
-        proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128, pred_ff_dim=32
+        proj_dim=128, num_head=4, enc_dim=128, 
+        pos_ff_dim=128, pred_ff_dim=32, drop_rate=dropout_rate
     )
 
     # Optimizer function
@@ -92,7 +101,7 @@ def main():
     # Callback for warmup scheduler
     lr_warmup_callback = WarmUpScheduler(
         final_lr=init_learning_rate,
-        warmup_steps=100
+        warmup_steps=lr_warmup_steps
     )
 
     # Callback for reducing the learning rate when loss get stuck in a plateau
@@ -100,7 +109,7 @@ def main():
         monitor='loss',
         mode='min',
         factor=lr_decay_rate,
-        patience=5,
+        patience=6,
         min_lr=1e-8
     )
 
