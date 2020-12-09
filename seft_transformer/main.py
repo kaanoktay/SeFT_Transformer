@@ -29,7 +29,7 @@ def parse_arguments():
                         metavar="1e-4", help='initial learning rate')
     parser.add_argument('--lr_decay_rate', type=float, default=0.25,
                         metavar="0.25", help='decay rate of learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=1e3,
+    parser.add_argument('--lr_warmup_steps', type=int, default=1e3,
                         metavar="1e3", help='learning rate warmup steps')
     parser.add_argument('--dropout_rate', type=float, default=0.1,
                         metavar="0.1", help='dropout rate')
