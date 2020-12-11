@@ -7,7 +7,7 @@ from tensorflow import keras
 
 from .training_utils import Preprocessing
 from .models import TimeSeriesTransformer
-from .callbacks import WarmUpScheduler, LearningRateLogger
+from .callbacks import WarmUpScheduler, LearningRateLogger, BatchPrinter
 
 
 tf.executing_eagerly()
@@ -25,7 +25,7 @@ def parse_arguments():
                         metavar="16", help='batch size')
     parser.add_argument('--num_epochs', type=int, default=500,
                         metavar="500", help='number of epochs')
-    parser.add_argument('--init_learning_rate', type=float, default=1e-4,
+    parser.add_argument('--init_lr', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
     parser.add_argument('--lr_decay_rate', type=float, default=0.25,
                         metavar="0.25", help='decay rate of learning rate')
@@ -33,8 +33,8 @@ def parse_arguments():
                         metavar="1e3", help='learning rate warmup steps')
     parser.add_argument('--dropout_rate', type=float, default=0.1,
                         metavar="0.1", help='dropout rate')
-    parser.add_argument('--skip_connection', type=str, default="layer_norm",
-                        metavar="layer_norm", help='type of skip connection')                        
+    parser.add_argument('--norm_type', type=str, default="layer_norm",
+                        metavar="layer_norm", help='normalization type')                        
     return parser.parse_args()
 
 def main():
@@ -44,18 +44,18 @@ def main():
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
     num_epochs = args.num_epochs  # Default: 500
-    init_learning_rate = args.init_learning_rate  # Default: 1e-4
+    init_lr = args.init_lr  # Default: 1e-4
     lr_decay_rate = args.lr_decay_rate  # Default: 0.25
     lr_warmup_steps = args.lr_warmup_steps # Default: 1e3
     dropout_rate = args.dropout_rate # Default: 0.1
-    skip_connection_type = args.skip_connection # Default: "layer_norm"
+    norm_type = args.norm_type # Default: "layer_norm"
 
     # Experiment logs folder
     experiment_log = os.path.join(
         log_dir,
-        "ex_initLr_" + str(init_learning_rate) +
+        "ex_initLr_" + str(init_lr) +
         "_dropRate_" + str(dropout_rate) +
-        "_warmSteps_" + str(lr_warmup_steps)
+        "_warmSteps_" + str(int(lr_warmup_steps))
     )
 
     # File to log variables e.g. learning rate
@@ -72,12 +72,13 @@ def main():
     # Initialize the model
     model = TimeSeriesTransformer(
         proj_dim=128, num_head=4, enc_dim=128,
-        pos_ff_dim=128, pred_ff_dim=32, drop_rate=dropout_rate
+        pos_ff_dim=128, pred_ff_dim=32, 
+        drop_rate=dropout_rate, norm_type=norm_type
     )
 
     # Optimizer function
     opt = keras.optimizers.Adam(
-        learning_rate=init_learning_rate
+        learning_rate=init_lr
     )
 
     # Loss function
@@ -98,9 +99,12 @@ def main():
     # Callback for logging the learning rate for inspection
     lr_logger_callback = LearningRateLogger()
 
+    # Callback for printing the first batch of every epoch
+    batch_callback = BatchPrinter()
+
     # Callback for warmup scheduler
     lr_warmup_callback = WarmUpScheduler(
-        final_lr=init_learning_rate,
+        final_lr=init_lr,
         warmup_steps=lr_warmup_steps
     )
 
@@ -149,6 +153,7 @@ def main():
         callbacks=[tensorboard_callback,
                    model_checkpoint_callback,
                    lr_schedule_callback,
+                   batch_callback,
                    lr_warmup_callback,
                    lr_logger_callback]
     )
