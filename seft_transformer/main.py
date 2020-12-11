@@ -153,6 +153,7 @@ def main():
                    model_checkpoint_callback,
                    lr_schedule_callback,
                    lr_warmup_callback,
+                   print_batch_callback,
                    lr_logger_callback]
     )
 
