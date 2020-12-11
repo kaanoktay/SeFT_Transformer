@@ -14,7 +14,7 @@ tf.executing_eagerly()
 checkpoint_filepath = './checkpoints/cp.ckpt'
 log_dir = "./logs"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-tf.random.set_seed(0)
+tf.random.set_seed(83)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
 
 def parse_arguments():

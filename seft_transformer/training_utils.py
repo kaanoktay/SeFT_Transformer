@@ -81,7 +81,7 @@ def build_training_iterator(dataset_name, epochs, batch_size, prepro_fn,
         with_info=True
     )
     n_samples = dataset_info.splits['train'].num_examples
-    steps_per_epoch = int(math.floor(n_samples / batch_size))
+    steps_per_epoch = int(math.ceil(n_samples / batch_size))
     if prepro_fn is not None:
         dataset = dataset.map(
             prepro_fn, num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -127,7 +127,7 @@ def build_training_iterator(dataset_name, epochs, batch_size, prepro_fn,
         batch_size,
         get_output_shapes(dataset),
         padding_values=get_padding_values(get_output_types(dataset)),
-        drop_remainder=True
+        drop_remainder=False
     )
     return batched_dataset.prefetch(tf.data.experimental.AUTOTUNE), steps_per_epoch
 
