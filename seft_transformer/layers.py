@@ -31,19 +31,45 @@ class InputEmbedding(layers.Layer):
         tot_enc = inp_enc + pos_enc  # (b, t, m, d)
         return tot_enc
 
+"""
+class ReZero(layers.Layer):
+    def __init__(self):
+        super(ReZero, self).__init__()
+        self.resweight = tf.variable(
+            initial_value=0.0,
+            trainable=True
+        )
+    def call(self, x1, x2):
+        return x1 + self.resweight * x2
+"""
 
 class AxialAttentionEncoderLayer(layers.Layer):
-    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
-                 ff_dim=128, drop_rate=0.1):
+    def __init__(self, proj_dim=128, enc_dim=128, num_head=4,
+                 ff_dim=128, drop_rate=0.1, norm_type="layer_norm"):
         super(AxialAttentionEncoderLayer, self).__init__()
         self.axAttention = AxialMultiHeadAttentionBlock(
             proj_dim=proj_dim, enc_dim=enc_dim,
             num_head=num_head, drop_rate=drop_rate
         )
         self.posFeedforward = PosFeedforwardBlock(
-            enc_dim=enc_dim,
-            ff_dim=ff_dim
+            enc_dim=enc_dim, ff_dim=ff_dim
         )
+        """
+        if norm_type == "layer_norm":
+            def get_residual():
+                def residual(x1, x2):
+                    return x1 + x2
+                return residual
+            def get_norm():
+                return layers.LayerNormalization()
+        elif norm == "re_zero":
+            def get_residual():
+                return ReZero()
+            def get_norm():
+                return layers.Lambda(tf.identity())
+        else:
+            raise ValueError('Invalid normalization: {}'.format(norm_type))
+        """
         self.layerNorm1 = layers.LayerNormalization()
         self.layerNorm2 = layers.LayerNormalization()
 

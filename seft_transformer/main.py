@@ -62,8 +62,7 @@ def main():
     file_writer = tf.summary.create_file_writer(experiment_log + "/variables")
     file_writer.set_as_default()
 
-    # Load data (epochs don't matter because we iterate over the dataset
-    # indefinitely)
+    # Load data
     transformation = Preprocessing(
         dataset='physionet2012', epochs=num_epochs, batch_size=batch_size)
     train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = \
@@ -93,7 +92,8 @@ def main():
         loss=loss_fn,
         metrics=[keras.metrics.BinaryAccuracy(name="accuracy"),
                  keras.metrics.AUC(curve="PR", name="auprc"),
-                 keras.metrics.AUC(curve="ROC", name="auroc")]
+                 keras.metrics.AUC(curve="ROC", name="auroc")],
+        run_eagerly=True
     )
 
     # Callback for logging the learning rate for inspection
@@ -160,7 +160,7 @@ def main():
     # Fit the model to the input data
     model.evaluate(
         test_iter,
-        steps=test_steps-1,
+        steps=test_steps,
         verbose=1
     )
     print("\n")

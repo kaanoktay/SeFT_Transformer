@@ -21,12 +21,12 @@ class TimeSeriesTransformer(keras.Model):
         )
         self.transformer_encoder = AxialAttentionEncoderLayer(
             proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
-            ff_dim=pos_ff_dim, drop_rate=drop_rate
+            ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type
         )
         self.class_prediction = ClassPredictionLayer(
             ff_dim=pred_ff_dim
         )
-        self.first_batch = False
+        self.first_batch = True
 
     def call(self, inputs):
         """Apply model to data.
@@ -41,6 +41,7 @@ class TimeSeriesTransformer(keras.Model):
         inp = inputs[2]  # (b, t, m)
         if self.first_batch:
             print(inp)
+            self.first_batch=False
         mask = inputs[3]  # (b, t, m)
         # Expand input dimensions if necessary
         if len(inp.shape) == 3:
