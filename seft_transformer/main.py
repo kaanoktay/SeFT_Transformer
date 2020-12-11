@@ -9,8 +9,6 @@ from .training_utils import Preprocessing
 from .models import TimeSeriesTransformer
 from .callbacks import WarmUpScheduler, LearningRateLogger, BatchPrinter
 
-
-tf.executing_eagerly()
 checkpoint_filepath = './checkpoints/cp.ckpt'
 log_dir = "./logs"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -92,8 +90,7 @@ def main():
         loss=loss_fn,
         metrics=[keras.metrics.BinaryAccuracy(name="accuracy"),
                  keras.metrics.AUC(curve="PR", name="auprc"),
-                 keras.metrics.AUC(curve="ROC", name="auroc")],
-        run_eagerly=True
+                 keras.metrics.AUC(curve="ROC", name="auroc")]
     )
 
     # Callback for logging the learning rate for inspection
@@ -137,7 +134,7 @@ def main():
     # Callback for Tensorboard logging
     tensorboard_callback = keras.callbacks.TensorBoard(
         log_dir=experiment_log,
-        profile_batch='350, 355'
+        update_freq='batch'
     )
 
     # Fit the model to the input data
@@ -153,7 +150,6 @@ def main():
                    model_checkpoint_callback,
                    lr_schedule_callback,
                    lr_warmup_callback,
-                   print_batch_callback,
                    lr_logger_callback]
     )
 
