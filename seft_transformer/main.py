@@ -100,7 +100,7 @@ def main():
     lr_logger_callback = LearningRateLogger()
 
     # Callback for printing the first batch of every epoch
-    batch_callback = BatchPrinter()
+    print_batch_callback = BatchPrinter()
 
     # Callback for warmup scheduler
     lr_warmup_callback = WarmUpScheduler(
@@ -145,15 +145,13 @@ def main():
     model.fit(
         train_iter,
         epochs=num_epochs,
-        # TODO(Max): Are you sure about the -1 ?
-        steps_per_epoch=steps_per_epoch-1,
+        steps_per_epoch=steps_per_epoch,
         validation_data=val_iter,
-        validation_steps=val_steps-1,
+        validation_steps=val_steps,
         verbose=1,
         callbacks=[tensorboard_callback,
                    model_checkpoint_callback,
                    lr_schedule_callback,
-                   batch_callback,
                    lr_warmup_callback,
                    lr_logger_callback]
     )
