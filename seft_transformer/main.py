@@ -54,7 +54,7 @@ def main():
         'ex_initLr_' + str(init_lr) +
         '_dropRate_' + str(dropout_rate) +
         '_warmSteps_' + str(int(lr_warmup_steps)) +
-        '_normType_' + 
+        '_normType_' + norm_type
     )
 
     # File to log variables e.g. learning rate
