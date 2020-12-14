@@ -264,11 +264,12 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
 
 
 class PosFeedforwardBlock(layers.Layer):
-    def __init__(self, enc_dim=128, ff_dim=128):
+    def __init__(self, enc_dim=128, ff_dim=128, drop_rate=0.1):
         super().__init__()
         self.enc_dim = enc_dim
         self.ff_dim = ff_dim
         self.relu = layers.ReLU()
+        self.dropout = layers.Dropout(drop_rate)
 
     def build(self, input_shape):
         # Input shapes
@@ -310,5 +311,6 @@ class PosFeedforwardBlock(layers.Layer):
         # Positionwise feedforward network
         out = tf.linalg.matvec(self.W1, inp) + self.B1
         out = self.relu(out)
+        out = self.dropout(out)
         out = tf.linalg.matvec(self.W2, out) + self.B2
         return out

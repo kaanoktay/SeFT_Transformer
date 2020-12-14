@@ -7,7 +7,7 @@ from tensorflow import keras
 
 from .training_utils import Preprocessing
 from .models import TimeSeriesTransformer
-from .callbacks import WarmUpScheduler, LearningRateLogger, BatchPrinter
+from .callbacks import WarmUpScheduler, LearningRateLogger
 
 checkpoint_filepath = './checkpoints/cp.ckpt'
 log_dir = "./logs"
@@ -31,8 +31,8 @@ def parse_arguments():
                         metavar="1e3", help='learning rate warmup steps')
     parser.add_argument('--dropout_rate', type=float, default=0.1,
                         metavar="0.1", help='dropout rate')
-    parser.add_argument('--norm_type', type=str, default="layer_norm",
-                        metavar="layer_norm", help='normalization type')                        
+    parser.add_argument('--norm_type', type=str, default='reZero',
+                        metavar="reZero", help='normalization type')                        
     return parser.parse_args()
 
 def main():
@@ -46,14 +46,15 @@ def main():
     lr_decay_rate = args.lr_decay_rate  # Default: 0.25
     lr_warmup_steps = args.lr_warmup_steps # Default: 1e3
     dropout_rate = args.dropout_rate # Default: 0.1
-    norm_type = args.norm_type # Default: "layer_norm"
+    norm_type = args.norm_type # Default: 'reZero'
 
     # Experiment logs folder
     experiment_log = os.path.join(
         log_dir,
-        "ex_initLr_" + str(init_lr) +
-        "_dropRate_" + str(dropout_rate) +
-        "_warmSteps_" + str(int(lr_warmup_steps))
+        'ex_initLr_' + str(init_lr) +
+        '_dropRate_' + str(dropout_rate) +
+        '_warmSteps_' + str(int(lr_warmup_steps)) +
+        '_normType_' + 
     )
 
     # File to log variables e.g. learning rate
@@ -88,16 +89,13 @@ def main():
     model.compile(
         optimizer=opt,
         loss=loss_fn,
-        metrics=[keras.metrics.BinaryAccuracy(name="accuracy"),
-                 keras.metrics.AUC(curve="PR", name="auprc"),
-                 keras.metrics.AUC(curve="ROC", name="auroc")]
+        metrics=[keras.metrics.BinaryAccuracy(name='accuracy'),
+                 keras.metrics.AUC(curve='PR', name='auprc'),
+                 keras.metrics.AUC(curve='ROC', name='auroc')]
     )
 
     # Callback for logging the learning rate for inspection
     lr_logger_callback = LearningRateLogger()
-
-    # Callback for printing the first batch of every epoch
-    print_batch_callback = BatchPrinter()
 
     # Callback for warmup scheduler
     lr_warmup_callback = WarmUpScheduler(

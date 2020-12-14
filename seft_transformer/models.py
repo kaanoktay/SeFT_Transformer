@@ -14,7 +14,7 @@ class TimeSeriesTransformer(keras.Model):
     """Time Series Transformer model."""
 
     def __init__(self, proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128,
-                 pred_ff_dim=32, drop_rate=0.1, norm_type="layer_norm"):
+                 pred_ff_dim=32, drop_rate=0.1, norm_type='reZero'):
         super(TimeSeriesTransformer, self).__init__()
         self.input_embedding = InputEmbedding(
             enc_dim=enc_dim
@@ -24,9 +24,8 @@ class TimeSeriesTransformer(keras.Model):
             ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type
         )
         self.class_prediction = ClassPredictionLayer(
-            ff_dim=pred_ff_dim
+            ff_dim=pred_ff_dim, drop_rate=drop_rate
         )
-        self.first_batch = True
 
     def call(self, inputs):
         """Apply model to data.
@@ -39,9 +38,6 @@ class TimeSeriesTransformer(keras.Model):
         # Get inputs
         time = inputs[1]  # (b, t)
         inp = inputs[2]  # (b, t, m)
-        if self.first_batch:
-            print(inp)
-            self.first_batch=False
         mask = inputs[3]  # (b, t, m)
         # Expand input dimensions if necessary
         if len(inp.shape) == 3:
