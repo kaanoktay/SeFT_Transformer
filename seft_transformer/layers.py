@@ -35,7 +35,7 @@ class InputEmbedding(layers.Layer):
 class ReZero(layers.Layer):
     def __init__(self):
         super(ReZero, self).__init__()
-        self.re_weight = tf.variable(
+        self.re_weight = tf.Variable(
             initial_value=0.0,
             trainable=True
         )
