@@ -27,7 +27,7 @@ def parse_arguments():
                         metavar="1e-4", help='initial learning rate')
     parser.add_argument('--lr_decay_rate', type=float, default=0.25,
                         metavar="0.25", help='decay rate of learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=1e3,
+    parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
                         metavar="1e3", help='learning rate warmup steps')
     parser.add_argument('--dropout_rate', type=float, default=0.1,
                         metavar="0.1", help='dropout rate')
@@ -44,7 +44,7 @@ def main():
     num_epochs = args.num_epochs  # Default: 500
     init_lr = args.init_lr  # Default: 1e-4
     lr_decay_rate = args.lr_decay_rate  # Default: 0.25
-    lr_warmup_steps = args.lr_warmup_steps # Default: 1e3
+    lr_warmup_steps = args.lr_warmup_steps # Default: 2e3
     dropout_rate = args.dropout_rate # Default: 0.1
     norm_type = args.norm_type # Default: 'reZero'
 
