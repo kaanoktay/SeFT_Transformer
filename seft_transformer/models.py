@@ -2,6 +2,7 @@
 from tensorflow import keras
 import tensorflow as tf
 from einops import rearrange
+import sys
 
 from .layers import (
     AxialAttentionEncoderLayer,
@@ -10,18 +11,24 @@ from .layers import (
 )
 
 
-class TimeSeriesTransformer(keras.Model):
+class TimeSeriesTransformer(keras.layers.Layer):
     """Time Series Transformer model."""
 
-    def __init__(self, proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128,
-                 pred_ff_dim=32, drop_rate=0.1, norm_type='reZero'):
+    def __init__(self, proj_dim=128, num_head=4, enc_dim=128, 
+                 pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.1, 
+                 norm_type='reZero', dataset='physionet2012'):
         super(TimeSeriesTransformer, self).__init__()
+        if dataset=='physionet2019':
+            causal_mask = True
+        else:
+            causal_mask = False
         self.input_embedding = InputEmbedding(
             enc_dim=enc_dim
         )
         self.transformer_encoder = AxialAttentionEncoderLayer(
             proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
             ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type
+            causal_mask=causal_mask
         )
         self.class_prediction = ClassPredictionLayer(
             ff_dim=pred_ff_dim, drop_rate=drop_rate

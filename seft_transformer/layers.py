@@ -45,12 +45,14 @@ class ReZero(layers.Layer):
 
 
 class AxialAttentionEncoderLayer(layers.Layer):
-    def __init__(self, proj_dim=128, enc_dim=128, num_head=4,
-                 ff_dim=128, drop_rate=0.1, norm_type="reZero"):
+    def __init__(self, proj_dim=128, enc_dim=128, 
+                 num_head=4, ff_dim=128, drop_rate=0.1, 
+                 norm_type="reZero", causal_mask=False):
         super(AxialAttentionEncoderLayer, self).__init__()
         self.axAttention = AxialMultiHeadAttentionBlock(
             proj_dim=proj_dim, enc_dim=enc_dim,
-            num_head=num_head, drop_rate=drop_rate
+            num_head=num_head, drop_rate=drop_rate,
+            causal_mask=causal_mask
         )
         self.posFeedforward = PosFeedforwardBlock(
             enc_dim=enc_dim, ff_dim=ff_dim,
@@ -122,6 +124,17 @@ class ClassPredictionLayer(layers.Layer):
         if mask is not None:
             mask = rearrange(mask, 'b t m -> b t m 1')
             inp = tf.where(mask, inp, 0)
+        # Calculate sum over the modalities
+        out = reduce(inp, 'b t m d -> b t d', 'sum')
+        # Normalize the sum
+        mask = tf.cast(mask, dtype='float32')
+        norm = reduce(mask, 'b t m 1-> b t 1', 'sum')
+        out = out / norm
+        # Predict the class
+        pred = self.densePred2(self.densePred1(self.dropout(out)))  # (b, t, 1)
+        return pred
+
+        """
         # Calculate sum over the timesteps and modalities
         out = reduce(inp, 'b t m d -> b d', 'sum')
         # Normalize the sum
@@ -131,3 +144,4 @@ class ClassPredictionLayer(layers.Layer):
         # Predict the class
         pred = self.densePred2(self.densePred1(self.dropout(out)))  # (b, 1)
         return pred
+        """

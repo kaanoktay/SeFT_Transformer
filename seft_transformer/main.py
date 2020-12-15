@@ -32,7 +32,9 @@ def parse_arguments():
     parser.add_argument('--dropout_rate', type=float, default=0.1,
                         metavar="0.1", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
-                        metavar="reZero", help='normalization type')                        
+                        metavar="reZero", help='normalization type')     
+    parser.add_argument('--dataset', type=str, default='physionet2012',
+                        metavar='physionet2012', help='dataset name')                    
     return parser.parse_args()
 
 def main():
@@ -47,7 +49,30 @@ def main():
     lr_warmup_steps = args.lr_warmup_steps # Default: 2e3
     dropout_rate = args.dropout_rate # Default: 0.1
     norm_type = args.norm_type # Default: 'reZero'
+    dataset = args.dataset # Default: 'physionet2012'
 
+    # Load data
+    transformation = Preprocessing(
+        dataset=dataset, epochs=num_epochs, batch_size=batch_size)
+    train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = \
+        transformation._prepare_dataset_for_training()
+
+    it = train_iter.__iter__()
+    data = it.__next__()
+    x = data[0]
+    y = data[1]
+    pdb.set_trace()
+    
+    # Initialize the model
+    model = TimeSeriesTransformer(
+        proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128, 
+        pred_ff_dim=32, drop_rate=dropout_rate, norm_type=norm_type
+        dataset=dataset
+    )
+
+    pdb.set_trace()
+    model(data)
+"""
     # Experiment logs folder
     experiment_log = os.path.join(
         log_dir,
@@ -60,19 +85,6 @@ def main():
     # File to log variables e.g. learning rate
     file_writer = tf.summary.create_file_writer(experiment_log + "/variables")
     file_writer.set_as_default()
-
-    # Load data
-    transformation = Preprocessing(
-        dataset='physionet2012', epochs=num_epochs, batch_size=batch_size)
-    train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = \
-        transformation._prepare_dataset_for_training()
-
-    # Initialize the model
-    model = TimeSeriesTransformer(
-        proj_dim=128, num_head=4, enc_dim=128,
-        pos_ff_dim=128, pred_ff_dim=32, 
-        drop_rate=dropout_rate, norm_type=norm_type
-    )
 
     # Optimizer function
     opt = keras.optimizers.Adam(
@@ -163,3 +175,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+"""

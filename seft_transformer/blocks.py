@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tf.linalg.LinearOperatorLowerTriangular as lowerTriangular
 from tensorflow.keras import layers
 from einops import rearrange
 import numpy as np
@@ -74,12 +75,14 @@ class InpEncodingBlock(layers.Layer):
 
 
 class SeqAttentionBlock(layers.Layer):
-    def __init__(self, proj_dim=128, num_head=4, drop_rate=0.1):
+    def __init__(self, proj_dim=128, num_head=4, 
+                 drop_rate=0.1, causal_mask=False):
         super().__init__()
         self.proj_dim = proj_dim
         self.num_head = num_head
         self.embed_dim = proj_dim // num_head
         self.dropout = layers.Dropout(drop_rate)
+        self.causal_mask = causal_mask
 
     def build(self, input_shape):
         # Input shapes
@@ -144,12 +147,19 @@ class SeqAttentionBlock(layers.Layer):
         # Calculate attention
         score = tf.einsum('...ij,...kj->...ik', q, k) / \
             np.sqrt(self.embed_dim)  # (b, m, h, t, t)
+        causal_mask = None
+        if self.causal_mask:
+            t = score.shape[-1]
+            causal_mask = lowerTriangular(tf.ones([t, t], dtype='bool')).to_dense()  # (t, t)
+            score = tf.where(causal_mask, score, -np.inf)
         if mask is not None:
             mask = rearrange(mask, 'b t m -> b m 1 1 t')
             score = tf.where(mask, score, -np.inf)
         weight = tf.nn.softmax(score)  # (b, m, h, t, t)
         if mask is not None:
             weight = tf.where(mask, weight, 0)
+        if causal_mask is not None:
+            weight = tf.where(causal_mask, weight, 0)
         # Check if there is any NaN in weights
         tf.debugging.check_numerics(
             tensor=weight,
@@ -219,12 +229,16 @@ class ModAttentionBlock(layers.Layer):
 
 
 class AxialMultiHeadAttentionBlock(layers.Layer):
-    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, drop_rate=0.1):
+    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
+                 drop_rate=0.1, causal_mask=False):
         super().__init__()
         self.seqAttention = SeqAttentionBlock(
-            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate)
+            proj_dim=proj_dim, num_head=num_head, 
+            drop_rate=drop_rate, causal_mask=causal_mask
+        )
         self.modAttention = ModAttentionBlock(
-            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate)
+            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate
+        )
         self.enc_dim = enc_dim
 
     def build(self, input_shape):
