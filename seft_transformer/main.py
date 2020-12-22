@@ -1,6 +1,7 @@
 """Main module for training models."""
 import argparse
 import os
+import sys
 import tensorflow as tf
 import pdb
 from tensorflow import keras
@@ -8,7 +9,10 @@ from tensorflow import keras
 from .training_utils import Preprocessing
 from .models import TimeSeriesTransformer
 from .callbacks import WarmUpScheduler, LearningRateLogger
+from tensorflow.python.util import deprecation
+deprecation._PRINT_DEPRECATION_WARNINGS = False
 
+tf.config.run_functions_eagerly(True)
 checkpoint_filepath = './checkpoints/cp.ckpt'
 log_dir = "./logs"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -56,23 +60,14 @@ def main():
         dataset=dataset, epochs=num_epochs, batch_size=batch_size)
     train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = \
         transformation._prepare_dataset_for_training()
-
-    it = train_iter.__iter__()
-    data = it.__next__()
-    x = data[0]
-    y = data[1]
-    pdb.set_trace()
     
     # Initialize the model
     model = TimeSeriesTransformer(
         proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128, 
-        pred_ff_dim=32, drop_rate=dropout_rate, norm_type=norm_type
+        pred_ff_dim=32, drop_rate=dropout_rate, norm_type=norm_type,
         dataset=dataset
     )
 
-    pdb.set_trace()
-    model(data)
-"""
     # Experiment logs folder
     experiment_log = os.path.join(
         log_dir,
@@ -94,7 +89,8 @@ def main():
     # Loss function
     loss_fn = keras.losses.BinaryCrossentropy(
         from_logits=False,
-        name="loss"
+        name="loss",
+        reduction=tf.keras.losses.Reduction.SUM
     )
 
     # Compile the model
@@ -175,4 +171,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-"""
+    

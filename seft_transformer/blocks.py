@@ -1,5 +1,5 @@
 import tensorflow as tf
-import tf.linalg.LinearOperatorLowerTriangular as lowerTriangular
+from tensorflow.linalg import LinearOperatorLowerTriangular
 from tensorflow.keras import layers
 from einops import rearrange
 import numpy as np
@@ -149,8 +149,10 @@ class SeqAttentionBlock(layers.Layer):
             np.sqrt(self.embed_dim)  # (b, m, h, t, t)
         causal_mask = None
         if self.causal_mask:
-            t = score.shape[-1]
-            causal_mask = lowerTriangular(tf.ones([t, t], dtype='bool')).to_dense()  # (t, t)
+            t = tf.shape(score)[-1]
+            causal_mask = LinearOperatorLowerTriangular(
+                tf.ones([t, t], dtype='bool')
+            ).to_dense()  # (t, t)
             score = tf.where(causal_mask, score, -np.inf)
         if mask is not None:
             mask = rearrange(mask, 'b t m -> b m 1 1 t')

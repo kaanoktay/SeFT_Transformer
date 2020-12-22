@@ -99,10 +99,11 @@ class AxialAttentionEncoderLayer(layers.Layer):
 class ClassPredictionLayer(layers.Layer):
     """Layer for predicting a class output from a series."""
 
-    def __init__(self, ff_dim=32, drop_rate=0.1):
+    def __init__(self, ff_dim=32, drop_rate=0.1, causal_mask=False):
         super(ClassPredictionLayer, self).__init__()
         self.ff_dim = ff_dim
         self.dropout = layers.Dropout(drop_rate)
+        self.causal_mask = causal_mask
 
     def build(self, input_shape):
         # Dense layer to aggregate different modalities
@@ -125,23 +126,20 @@ class ClassPredictionLayer(layers.Layer):
             mask = rearrange(mask, 'b t m -> b t m 1')
             inp = tf.where(mask, inp, 0)
         # Calculate sum over the modalities
-        out = reduce(inp, 'b t m d -> b t d', 'sum')
-        # Normalize the sum
-        mask = tf.cast(mask, dtype='float32')
-        norm = reduce(mask, 'b t m 1-> b t 1', 'sum')
-        out = out / norm
-        # Predict the class
-        pred = self.densePred2(self.densePred1(self.dropout(out)))  # (b, t, 1)
-        return pred
-
-        """
+        if self.causal_mask:
+            out = reduce(inp, 'b t m d -> b t d', 'sum')
         # Calculate sum over the timesteps and modalities
-        out = reduce(inp, 'b t m d -> b d', 'sum')
-        # Normalize the sum
+        else:
+            out = reduce(inp, 'b t m d -> b d', 'sum')
+        # Calculate number of measured samples and normalize the sum
         mask = tf.cast(mask, dtype='float32')
-        norm = reduce(mask, 'b t m 1-> b 1', 'sum')
-        out = out / norm
+        if self.causal_mask:
+            norm = reduce(mask, 'b t m 1-> b t 1', 'sum')
+            out = out / norm  # (b, t, d)
+            out = tf.where(tf.math.is_nan(out), 0, out)
+        else:
+            norm = reduce(mask, 'b t m 1-> b 1', 'sum')
+            out = out / norm  # (b, d)
         # Predict the class
-        pred = self.densePred2(self.densePred1(self.dropout(out)))  # (b, 1)
-        return pred
-        """
+        pred = self.densePred2(self.densePred1(self.dropout(out)))
+        return pred  # if causal_mask (b, t, 1) else (b, 1)

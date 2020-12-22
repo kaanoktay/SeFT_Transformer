@@ -11,7 +11,7 @@ from .layers import (
 )
 
 
-class TimeSeriesTransformer(keras.layers.Layer):
+class TimeSeriesTransformer(keras.Model):
     """Time Series Transformer model."""
 
     def __init__(self, proj_dim=128, num_head=4, enc_dim=128, 
@@ -19,20 +19,57 @@ class TimeSeriesTransformer(keras.layers.Layer):
                  norm_type='reZero', dataset='physionet2012'):
         super(TimeSeriesTransformer, self).__init__()
         if dataset=='physionet2019':
-            causal_mask = True
+            self.causal_mask = True
         else:
-            causal_mask = False
+            self.causal_mask = False
         self.input_embedding = InputEmbedding(
             enc_dim=enc_dim
         )
         self.transformer_encoder = AxialAttentionEncoderLayer(
             proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
-            ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type
-            causal_mask=causal_mask
+            ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type,
+            causal_mask=self.causal_mask
         )
         self.class_prediction = ClassPredictionLayer(
-            ff_dim=pred_ff_dim, drop_rate=drop_rate
+            ff_dim=pred_ff_dim, drop_rate=drop_rate,
+            causal_mask=self.causal_mask
         )
+    
+    def train_step(self, data):
+        x, y = data 
+
+        with tf.GradientTape() as tape:
+            if self.causal_mask:
+                # Forward pass
+                y_pred, count = self(x, training=True)
+                # Calculate the sample weight
+                mask = tf.cast(
+                    tf.sequence_mask(count),
+                    dtype='float32'
+                )
+                sample_weight = mask / \
+                    tf.reduce_sum(tf.cast(count, dtype='float32'))
+                # Compute the loss value
+                loss = self.compiled_loss(y, y_pred, sample_weight)
+            else:
+                # Forward pass
+                y_pred = self(x, training=True)
+                # Compute the loss value
+                loss = self.compiled_loss(y, y_pred)
+        
+        # Compute gradients
+        trainable_vars = self.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+        # Update weights
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+        # Update metrics (includes the metric that tracks the loss)
+        if self.causal_mask:
+            sample_weight = mask
+            self.compiled_metrics.update_state(y, y_pred, sample_weight)
+        else:
+            self.compiled_metrics.update_state(y, y_pred)
+        # Return a dict mapping metric names to current value
+        return {m.name: m.result() for m in self.metrics}
 
     def call(self, inputs):
         """Apply model to data.
@@ -46,6 +83,7 @@ class TimeSeriesTransformer(keras.layers.Layer):
         time = inputs[1]  # (b, t)
         inp = inputs[2]  # (b, t, m)
         mask = inputs[3]  # (b, t, m)
+        count = inputs[4]  # (b, 1)
         # Expand input dimensions if necessary
         if len(inp.shape) == 3:
             inp = rearrange(inp, 'b t m -> b t m 1')
@@ -53,6 +91,9 @@ class TimeSeriesTransformer(keras.layers.Layer):
         enc_inp = self.input_embedding(inp, time, mask)  # (b, t, m, d)
         # Calculate attention
         attn = self.transformer_encoder(enc_inp, mask)  # (b, t, m, d)
-        # Make prediction
-        pred = self.class_prediction(attn, mask)  # (b, 1)
-        return pred
+        # Make prediction: if causal_mask (b, t, 1) else (b, 1)
+        pred = self.class_prediction(attn, mask)
+        if self.causal_mask:
+            return pred, count
+        else:
+            return pred
