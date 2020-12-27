@@ -32,13 +32,17 @@ def parse_arguments():
     parser.add_argument('--lr_decay_rate', type=float, default=0.25,
                         metavar="0.25", help='decay rate of learning rate')
     parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
-                        metavar="1e3", help='learning rate warmup steps')
-    parser.add_argument('--dropout_rate', type=float, default=0.1,
-                        metavar="0.1", help='dropout rate')
+                        metavar="2e3", help='learning rate warmup steps')
+    parser.add_argument('--dropout_rate', type=float, default=0.2,
+                        metavar="0.2", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
                         metavar="reZero", help='normalization type')     
     parser.add_argument('--dataset', type=str, default='physionet2012',
-                        metavar='physionet2012', help='dataset name')                    
+                        metavar='physionet2012', help='dataset name')
+    parser.add_argument('--proj_dim', type=int, default='32',
+                        metavar='32', help='projection dimension')
+    parser.add_argument('--num_heads', type=int, default='2',
+                        metavar='2', help='number of heads')  
     return parser.parse_args()
 
 def main():
@@ -50,10 +54,12 @@ def main():
     num_epochs = args.num_epochs  # Default: 500
     init_lr = args.init_lr  # Default: 1e-4
     lr_decay_rate = args.lr_decay_rate  # Default: 0.25
-    lr_warmup_steps = args.lr_warmup_steps # Default: 2e3
-    dropout_rate = args.dropout_rate # Default: 0.1
-    norm_type = args.norm_type # Default: 'reZero'
-    dataset = args.dataset # Default: 'physionet2012'
+    lr_warmup_steps = args.lr_warmup_steps  # Default: 2e3
+    dropout_rate = args.dropout_rate  # Default: 0.2
+    norm_type = args.norm_type  # Default: 'reZero'
+    dataset = args.dataset  # Default: 'physionet2012'
+    proj_dim = args.proj_dim  # Default: 32
+    num_heads = args.num_heads  # Default: 2
 
     # Load data
     transformation = Preprocessing(
@@ -63,17 +69,17 @@ def main():
     
     # Initialize the model
     model = TimeSeriesTransformer(
-        proj_dim=128, num_head=4, enc_dim=128, pos_ff_dim=128, 
-        pred_ff_dim=32, drop_rate=dropout_rate, norm_type=norm_type,
-        dataset=dataset
+        proj_dim=proj_dim, num_head=num_heads, enc_dim=proj_dim, 
+        pos_ff_dim=proj_dim, pred_ff_dim=proj_dim/4, drop_rate=dropout_rate, 
+        norm_type=norm_type, dataset=dataset
     )
 
     # Experiment logs folder
     experiment_log = os.path.join(
         log_dir,
-        'ex_initLr_' + str(init_lr) +
-        '_dropRate_' + str(dropout_rate) +
-        '_warmSteps_' + str(int(lr_warmup_steps)) +
+        'ex_batchSize_' + str(batch_size) +
+        '_projDim_' + str(proj_dim) +
+        '_numHeads_' + str(num_heads) +
         '_normType_' + norm_type
     )
 

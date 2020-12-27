@@ -15,7 +15,7 @@ class TimeSeriesTransformer(keras.Model):
     """Time Series Transformer model."""
 
     def __init__(self, proj_dim=128, num_head=4, enc_dim=128, 
-                 pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.1, 
+                 pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.2, 
                  norm_type='reZero', dataset='physionet2012'):
         super(TimeSeriesTransformer, self).__init__()
         if dataset=='physionet2019':

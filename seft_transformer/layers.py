@@ -46,7 +46,7 @@ class ReZero(layers.Layer):
 
 class AxialAttentionEncoderLayer(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, 
-                 num_head=4, ff_dim=128, drop_rate=0.1, 
+                 num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False):
         super(AxialAttentionEncoderLayer, self).__init__()
         self.axAttention = AxialMultiHeadAttentionBlock(
@@ -99,7 +99,7 @@ class AxialAttentionEncoderLayer(layers.Layer):
 class ClassPredictionLayer(layers.Layer):
     """Layer for predicting a class output from a series."""
 
-    def __init__(self, ff_dim=32, drop_rate=0.1, causal_mask=False):
+    def __init__(self, ff_dim=32, drop_rate=0.2, causal_mask=False):
         super(ClassPredictionLayer, self).__init__()
         self.ff_dim = ff_dim
         self.dropout = layers.Dropout(drop_rate)

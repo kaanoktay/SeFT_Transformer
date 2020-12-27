@@ -76,7 +76,7 @@ class InpEncodingBlock(layers.Layer):
 
 class SeqAttentionBlock(layers.Layer):
     def __init__(self, proj_dim=128, num_head=4, 
-                 drop_rate=0.1, causal_mask=False):
+                 drop_rate=0.2, causal_mask=False):
         super().__init__()
         self.proj_dim = proj_dim
         self.num_head = num_head
@@ -177,7 +177,7 @@ class SeqAttentionBlock(layers.Layer):
 
 
 class ModAttentionBlock(layers.Layer):
-    def __init__(self, proj_dim=128, num_head=4, drop_rate=0.1):
+    def __init__(self, proj_dim=128, num_head=4, drop_rate=0.2):
         super().__init__()
         self.proj_dim = proj_dim
         self.num_head = num_head
@@ -232,7 +232,7 @@ class ModAttentionBlock(layers.Layer):
 
 class AxialMultiHeadAttentionBlock(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
-                 drop_rate=0.1, causal_mask=False):
+                 drop_rate=0.2, causal_mask=False):
         super().__init__()
         self.seqAttention = SeqAttentionBlock(
             proj_dim=proj_dim, num_head=num_head, 
@@ -280,7 +280,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
 
 
 class PosFeedforwardBlock(layers.Layer):
-    def __init__(self, enc_dim=128, ff_dim=128, drop_rate=0.1):
+    def __init__(self, enc_dim=128, ff_dim=128, drop_rate=0.2):
         super().__init__()
         self.enc_dim = enc_dim
         self.ff_dim = ff_dim
