@@ -12,7 +12,7 @@ from .callbacks import WarmUpScheduler, LearningRateLogger
 from tensorflow.python.util import deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
-tf.config.run_functions_eagerly(True)
+
 checkpoint_filepath = './checkpoints/cp.ckpt'
 log_dir = "./logs"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
