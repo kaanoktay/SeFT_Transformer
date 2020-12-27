@@ -87,11 +87,17 @@ def main():
     )
 
     # Loss function
-    loss_fn = keras.losses.BinaryCrossentropy(
-        from_logits=False,
-        name="loss",
-        reduction=tf.keras.losses.Reduction.SUM
-    )
+    if dataset == 'physionet2019':
+        loss_fn = keras.losses.BinaryCrossentropy(
+            from_logits=False,
+            name="loss",
+            reduction=tf.keras.losses.Reduction.SUM
+        )
+    else:
+        loss_fn = keras.losses.BinaryCrossentropy(
+            from_logits=False,
+            name="loss"
+        )
 
     # Compile the model
     model.compile(
