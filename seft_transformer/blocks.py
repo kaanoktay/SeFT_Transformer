@@ -82,7 +82,6 @@ class ModEncodingBlock(layers.Layer):
     def build(self, input_shape):
         # Input shapes
         num_mod = input_shape[-2]
-        batch_size = input_shape[0]
         # Embedding layer
         self.embedding_layer = layers.Embedding(
             num_mod,
@@ -90,17 +89,17 @@ class ModEncodingBlock(layers.Layer):
             input_length=num_mod
         )
         # Modality --> integers
-        self.mods = repeat(tf.range(num_mod), 'm -> b 1 m', b=batch_size)
+        self.mods = rearrange(tf.range(num_mod), 'm -> 1 1 m')
 
     def call(self, inp):
         """
         Input shapes:
           inp: (b, t, m, i)
         Output shapes:
-          return: (b, 1, m, d)
+          return: (1, 1, m, d)
         """
         # Calculate modality data encodings
-        mod_enc = self.embedding_layer(self.mods)  # (b, 1, m, d)
+        mod_enc = self.embedding_layer(self.mods)  # (1, 1, m, d)
         return mod_enc
 
 

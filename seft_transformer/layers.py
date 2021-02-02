@@ -31,7 +31,7 @@ class InputEmbedding(layers.Layer):
         """
         pos_enc = self.pos_encoding(time)  # (b, t, t, d)
         inp_enc = self.inp_encoding(inp)  # (b, t, m, d)
-        mod_enc = self.mod_encoding(inp)  # (b, 1, m, d)
+        mod_enc = self.mod_encoding(inp)  # (1, 1, m, d)
         return inp_enc + mod_enc, pos_enc
 
 
