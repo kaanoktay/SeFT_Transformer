@@ -1,8 +1,9 @@
 import tensorflow as tf
 from tensorflow.linalg import LinearOperatorLowerTriangular
 from tensorflow.keras import layers
-from einops import rearrange
+from einops import rearrange, repeat
 import numpy as np
+import sys
 
 
 class PosEncodingBlock(layers.Layer):
@@ -14,30 +15,27 @@ class PosEncodingBlock(layers.Layer):
             * -(tf.math.log(10000.0) / enc_dim)
         )
 
-    def call(self, time, mask):
+    def call(self, time):
         """
         Input shapes:
           time: (b, t)
-          mask: (b, t, m)
         Output shapes:
-          return: (b, t, m, d)  -> if mask is None: (b, t, 1, d)
+          return: (b, t, t, d)
         """
+        rel_time = rearrange(time, 'b t -> b t 1') - \
+            rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
+        #rel_time = tf.math.abs(rel_time)
         # Calculate sine and cosine components
-        angles = tf.einsum('bt,f->btf', time, self.f)  # (b, t, d/2)
-        sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
-        cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
+        angles = tf.einsum('btl,f->btlf', rel_time, self.f)  # (b, t, t, d/2)
+        sin_enc = tf.math.sin(angles)  # sin encodings (b, t, t, d/2)
+        cos_enc = tf.math.cos(angles)  # cos encodings (b, t, t, d/2)
         # Construct positional encodings
-        pos_enc = rearrange([sin_enc, cos_enc],  'z b t k -> b t (k z)')
-        pos_enc = rearrange(pos_enc, 'b t d -> b t 1 d')
-        # Replace the invalid positions with zeros
-        if mask is not None:
-            mask = rearrange(mask, 'b t m -> b t m 1')
-            pos_enc = tf.where(mask, pos_enc, 0)  # (b, t, m, d)
-        return pos_enc
+        pos_enc = rearrange([sin_enc, cos_enc],  'z b t l k -> b t l (k z)')
+        return pos_enc  # encodings (b, t, t, d)
 
 
 class InpEncodingBlock(layers.Layer):
-    """Layer for the computation of value embeddings."""
+    """Layer for the computation of input encodings."""
 
     def __init__(self, enc_dim=128):
         super(InpEncodingBlock, self).__init__()
@@ -72,6 +70,38 @@ class InpEncodingBlock(layers.Layer):
         # Calculate input data encodings
         inp_enc = tf.linalg.matvec(self.W, inp) + self.B  # (b, t, m, d)
         return inp_enc
+
+
+class ModEncodingBlock(layers.Layer):
+    """Layer for the computation of modality encodings."""
+
+    def __init__(self, enc_dim=128):
+        super(ModEncodingBlock, self).__init__()
+        self.enc_dim = enc_dim
+
+    def build(self, input_shape):
+        # Input shapes
+        num_mod = input_shape[-2]
+        batch_size = input_shape[0]
+        # Embedding layer
+        self.embedding_layer = layers.Embedding(
+            num_mod,
+            self.enc_dim,
+            input_length=num_mod
+        )
+        # Modality --> integers
+        self.mods = repeat(tf.range(num_mod), 'm -> b 1 m', b=batch_size)
+
+    def call(self, inp):
+        """
+        Input shapes:
+          inp: (b, t, m, i)
+        Output shapes:
+          return: (b, 1, m, d)
+        """
+        # Calculate modality data encodings
+        mod_enc = self.embedding_layer(self.mods)  # (b, 1, m, d)
+        return mod_enc
 
 
 class SeqAttentionBlock(layers.Layer):
@@ -124,11 +154,14 @@ class SeqAttentionBlock(layers.Layer):
                 shape=(num_mod, self.proj_dim), dtype="float32"),
             trainable=True
         )
+        # Dense layers: time
+        self.time_dense = layers.Dense(self.proj_dim)
 
-    def call(self, inp, mask):
+    def call(self, inp, pos, mask):
         """
         Input shapes:
           inp:  (b, t, m, d)
+          pos:  (b, t, t, d) 
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, p)
@@ -137,6 +170,7 @@ class SeqAttentionBlock(layers.Layer):
         q = tf.linalg.matvec(self.Wq, inp) + self.Bq
         k = tf.linalg.matvec(self.Wk, inp) + self.Bk
         v = tf.linalg.matvec(self.Wv, inp) + self.Bv
+        t = self.time_dense(pos)
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
@@ -144,9 +178,12 @@ class SeqAttentionBlock(layers.Layer):
                       h=self.num_head)  # (b, m, h, t, e)
         v = rearrange(v, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
+        t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
+                      h=self.num_head)  # (b, 1, h, t, t, e)
         # Calculate attention
-        score = tf.einsum('...ij,...kj->...ik', q, k) / \
-            np.sqrt(self.embed_dim)  # (b, m, h, t, t)
+        score = tf.einsum('...ij,...kj->...ik', q, k) + \
+            tf.linalg.matvec(t, q)
+        score = score / (self.embed_dim**0.5)  # (b, m, h, t, t)
         causal_mask = None
         if self.causal_mask:
             t = tf.shape(score)[-1]
@@ -208,8 +245,8 @@ class ModAttentionBlock(layers.Layer):
         v = rearrange(v, 'b t m (h e) -> b t h m e',
                       h=self.num_head)  # (b, t, h, m, e)
         # Calculate attention
-        score = tf.einsum('...ij,...kj->...ik', q, k) / \
-            np.sqrt(self.embed_dim)  # (b, t, h, m, m)
+        score = tf.einsum('...ij,...kj->...ik', q, k)
+        score = score / (self.embed_dim**0.5)  # (b, t, h, m, m)
         if mask is not None:
             mask = rearrange(mask, 'b t m -> b t 1 1 m')
             score = tf.where(mask, score, -np.inf)
@@ -262,18 +299,20 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
             trainable=True
         )
 
-    def call(self, inp, mask):
+    def call(self, inp, pos, mask):
         """
         Input shapes:
           inp:  (b, t, m, d)
+          pos:  (b, t, t, d)
+          mod:  (b, 1, m, d)
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, d)
         """
         # Attention over timestamps
-        out = self.seqAttention(inp=inp, mask=mask)  # (b, t, m, p)
+        out = self.seqAttention(inp, pos, mask)  # (b, t, m, p)
         # Attention over modalities
-        out = self.modAttention(inp=out, mask=mask)   # (b, t, m, p)
+        out = self.modAttention(out, mask)   # (b, t, m, p)
         # Linear projection to encoding dimension
         out = tf.linalg.matvec(self.W, out) + self.B
         return out

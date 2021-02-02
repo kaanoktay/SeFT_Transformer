@@ -88,9 +88,9 @@ class TimeSeriesTransformer(keras.Model):
         if len(inp.shape) == 3:
             inp = rearrange(inp, 'b t m -> b t m 1')
         # Encode inputs
-        enc_inp = self.input_embedding(inp, time, mask)  # (b, t, m, d)
+        inp_enc, pos_enc = self.input_embedding(inp, time, mask)
         # Calculate attention
-        attn = self.transformer_encoder(enc_inp, mask)  # (b, t, m, d)
+        attn = self.transformer_encoder(inp_enc, pos_enc, mask)
         # Make prediction: if causal_mask (b, t, 1) else (b, 1)
         pred = self.class_prediction(attn, mask)
         if self.causal_mask:

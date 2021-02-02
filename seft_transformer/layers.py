@@ -2,11 +2,13 @@
 from tensorflow.keras import layers
 import tensorflow as tf
 from einops import rearrange, reduce
+import sys
 
 from .blocks import (
     AxialMultiHeadAttentionBlock,
     PosEncodingBlock,
     InpEncodingBlock,
+    ModEncodingBlock,
     PosFeedforwardBlock
 )
 
@@ -16,6 +18,7 @@ class InputEmbedding(layers.Layer):
         super(InputEmbedding, self).__init__()
         self.pos_encoding = PosEncodingBlock(enc_dim=enc_dim)
         self.inp_encoding = InpEncodingBlock(enc_dim=enc_dim)
+        self.mod_encoding = ModEncodingBlock(enc_dim=enc_dim)
 
     def call(self, inp, time, mask):
         """
@@ -26,10 +29,10 @@ class InputEmbedding(layers.Layer):
         Output shapes:
           return: (b, t, m, d)
         """
-        pos_enc = self.pos_encoding(time, mask)  # (b, t, m, d)
+        pos_enc = self.pos_encoding(time)  # (b, t, t, d)
         inp_enc = self.inp_encoding(inp)  # (b, t, m, d)
-        tot_enc = inp_enc + pos_enc  # (b, t, m, d)
-        return tot_enc
+        mod_enc = self.mod_encoding(inp)  # (b, 1, m, d)
+        return inp_enc + mod_enc, pos_enc
 
 
 class ReZero(layers.Layer):
@@ -79,16 +82,18 @@ class AxialAttentionEncoderLayer(layers.Layer):
         self.residual1 = get_residual()
         self.residual2 = get_residual()
 
-    def call(self, inp, mask):
+    def call(self, inp, pos, mask):
         """
         Input shapes:
           inp:  (b, t, m, d)
+          pos:  (b, t, t, d)
+          mod:  (b, 1, m, d)
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, d)
         """
         # Calculate attention and apply residual + normalization
-        attn = self.axAttention(inp, mask)  # (b, t, m, d)
+        attn = self.axAttention(inp, pos, mask)  # (b, t, m, d)
         attn = self.norm1(self.residual1(inp, attn))  # (b, t, m, d)
         # Calculate positionwise feedforward and apply residual + normalization
         attn_ffn = self.posFeedforward(attn)  # (b, t, m, d)
