@@ -35,9 +35,13 @@ def parse_arguments():
     parser.add_argument('--dropout_rate', type=float, default=0.2,
                         metavar="0.2", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
-                        metavar="reZero", help='normalization type')     
+                        metavar="reZero", help='normalization type')
     parser.add_argument('--dataset', type=str, default='physionet2012',
                         metavar='physionet2012', help='dataset name')
+    parser.add_argument('--equivariance', type=bool, default=False,
+                        metavar='False', help='translational equivariance')
+    parser.add_argument('--num_layers', type=int, default='1',
+                        metavar='1', help='number of layers')
     parser.add_argument('--proj_dim', type=int, default='32',
                         metavar='32', help='projection dimension')
     parser.add_argument('--num_heads', type=int, default='2',
@@ -57,6 +61,8 @@ def main():
     dropout_rate = args.dropout_rate  # Default: 0.2
     norm_type = args.norm_type  # Default: 'reZero'
     dataset = args.dataset  # Default: 'physionet2012'
+    equivariance = args.equivariance  # Default: False
+    num_layers = args.num_layers  # Default: 32
     proj_dim = args.proj_dim  # Default: 32
     num_heads = args.num_heads  # Default: 2
 
@@ -68,9 +74,11 @@ def main():
     
     # Initialize the model
     model = TimeSeriesTransformer(
-        proj_dim=proj_dim, num_head=num_heads, enc_dim=proj_dim, 
-        pos_ff_dim=proj_dim, pred_ff_dim=proj_dim/4, drop_rate=dropout_rate, 
-        norm_type=norm_type, dataset=dataset
+        proj_dim=proj_dim, num_head=num_heads,
+        enc_dim=proj_dim, pos_ff_dim=proj_dim,
+        pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
+        norm_type=norm_type, dataset=dataset,
+        equivar=equivariance, num_layers=num_layers
     )
 
     # Experiment logs folder
@@ -78,6 +86,7 @@ def main():
         log_dir,
         'ex_batchSize_' + str(batch_size) +
         '_projDim_' + str(proj_dim) +
+        '_transEq_' + str(equivariance) +
         '_numHeads_' + str(num_heads) +
         '_normType_' + norm_type
     )
@@ -152,7 +161,7 @@ def main():
     tensorboard_callback = keras.callbacks.TensorBoard(
         log_dir=experiment_log,
         update_freq='epoch',
-        profile_batch='100,120'
+        profile_batch='100,110'
     )
 
     # Fit the model to the input data

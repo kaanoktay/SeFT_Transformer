@@ -16,23 +16,30 @@ from .blocks import (
 class InputEmbedding(layers.Layer):
     def __init__(self, enc_dim=128):
         super(InputEmbedding, self).__init__()
-        self.pos_encoding = PosEncodingBlock(enc_dim=enc_dim)
-        self.inp_encoding = InpEncodingBlock(enc_dim=enc_dim)
-        self.mod_encoding = ModEncodingBlock(enc_dim=enc_dim)
+        self.pos_encoding = PosEncodingBlock(
+            enc_dim=enc_dim)
+        self.inp_encoding = InpEncodingBlock(
+            enc_dim=enc_dim)
+        self.mod_encoding = ModEncodingBlock(
+            enc_dim=enc_dim)
 
-    def call(self, inp, time, mask):
+    def call(self, inp, time, mask, equivar):
         """
         Input shapes:
           inp:  (b, t, m, i)
           time: (b, t)
           mask: (b, t, m)
         Output shapes:
-          return: (b, t, m, d)
+          return: (b, t, m, d), (b, t, t, d) if equivar
+                  (b, t, m, d)               else
         """
-        pos_enc = self.pos_encoding(time)  # (b, t, t, d)
-        inp_enc = self.inp_encoding(inp)  # (b, t, m, d)
-        mod_enc = self.mod_encoding(inp)  # (1, 1, m, d)
-        return inp_enc + mod_enc, pos_enc
+        pos_enc = self.pos_encoding(time, equivar)
+        inp_enc = self.inp_encoding(inp)
+        mod_enc = self.mod_encoding(inp)
+        if equivar:
+            return inp_enc + mod_enc, pos_enc
+        else:
+            return inp_enc + mod_enc + pos_enc
 
 
 class ReZero(layers.Layer):
@@ -82,18 +89,17 @@ class AxialAttentionEncoderLayer(layers.Layer):
         self.residual1 = get_residual()
         self.residual2 = get_residual()
 
-    def call(self, inp, pos, mask):
+    def call(self, inp, pos, mask, equivar):
         """
         Input shapes:
           inp:  (b, t, m, d)
           pos:  (b, t, t, d)
-          mod:  (b, 1, m, d)
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, d)
         """
         # Calculate attention and apply residual + normalization
-        attn = self.axAttention(inp, pos, mask)  # (b, t, m, d)
+        attn = self.axAttention(inp, pos, mask, equivar)  # (b, t, m, d)
         attn = self.norm1(self.residual1(inp, attn))  # (b, t, m, d)
         # Calculate positionwise feedforward and apply residual + normalization
         attn_ffn = self.posFeedforward(attn)  # (b, t, m, d)

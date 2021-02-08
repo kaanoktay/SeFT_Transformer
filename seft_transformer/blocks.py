@@ -15,23 +15,38 @@ class PosEncodingBlock(layers.Layer):
             * -(tf.math.log(10000.0) / enc_dim)
         )
 
-    def call(self, time):
+    def call(self, time, equivar):
         """
         Input shapes:
           time: (b, t)
         Output shapes:
-          return: (b, t, t, d)
+          return: (b, t, t, d) if equivar
+                  (b, t, 1, d) else
         """
-        rel_time = rearrange(time, 'b t -> b t 1') - \
-            rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
-        #rel_time = tf.math.abs(rel_time)
-        # Calculate sine and cosine components
-        angles = tf.einsum('btl,f->btlf', rel_time, self.f)  # (b, t, t, d/2)
-        sin_enc = tf.math.sin(angles)  # sin encodings (b, t, t, d/2)
-        cos_enc = tf.math.cos(angles)  # cos encodings (b, t, t, d/2)
-        # Construct positional encodings
-        pos_enc = rearrange([sin_enc, cos_enc],  'z b t l k -> b t l (k z)')
-        return pos_enc  # encodings (b, t, t, d)
+        if equivar:
+            rel_time = rearrange(time, 'b t -> b t 1') - \
+                rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
+            # Calculate sine and cosine components
+            angles = tf.einsum(
+                'btl,f->btlf', rel_time, self.f)  # (b, t, t, d/2)
+            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, t, d/2)
+            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, t, d/2)
+            # Construct positional encodings
+            pos_enc = rearrange(
+                [sin_enc, cos_enc],  'z b t l k -> b t l (k z)')
+            return pos_enc  # (b, t, t, d)
+        else:
+            # Calculate sine and cosine components
+            angles = tf.einsum(
+                'bt,f->btf', time, self.f)  # (b, t, d/2)
+            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
+            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
+            # Construct positional encodings
+            pos_enc = rearrange(
+                [sin_enc, cos_enc],  'z b t k -> b t 1 (k z)')
+            pos_enc = rearrange(
+                pos_enc, 'b t d -> b t 1 d')
+            return pos_enc  # (b, t, 1, d)
 
 
 class InpEncodingBlock(layers.Layer):
@@ -156,11 +171,11 @@ class SeqAttentionBlock(layers.Layer):
         # Dense layers: time
         self.time_dense = layers.Dense(self.proj_dim)
 
-    def call(self, inp, pos, mask):
+    def call(self, inp, pos, mask, equivar):
         """
         Input shapes:
           inp:  (b, t, m, d)
-          pos:  (b, t, t, d) 
+          pos:  (b, t, t, d)
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, p)
@@ -169,7 +184,8 @@ class SeqAttentionBlock(layers.Layer):
         q = tf.linalg.matvec(self.Wq, inp) + self.Bq
         k = tf.linalg.matvec(self.Wk, inp) + self.Bk
         v = tf.linalg.matvec(self.Wv, inp) + self.Bv
-        t = self.time_dense(pos)
+        if equivar:
+            t = self.time_dense(pos)
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
@@ -177,11 +193,15 @@ class SeqAttentionBlock(layers.Layer):
                       h=self.num_head)  # (b, m, h, t, e)
         v = rearrange(v, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
-        t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
-                      h=self.num_head)  # (b, 1, h, t, t, e)
+        if equivar:
+            t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
+                          h=self.num_head)  # (b, 1, h, t, t, e)
         # Calculate attention
-        score = tf.einsum('...ij,...kj->...ik', q, k) + \
-            tf.linalg.matvec(t, q)
+        if equivar:
+            score = tf.einsum('...ij,...kj->...ik', q, k) + \
+                tf.linalg.matvec(t, q)
+        else:
+            score = tf.einsum('...ij,...kj->...ik', q, k)
         score = score / (self.embed_dim**0.5)  # (b, m, h, t, t)
         causal_mask = None
         if self.causal_mask:
@@ -298,7 +318,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
             trainable=True
         )
 
-    def call(self, inp, pos, mask):
+    def call(self, inp, pos, mask, equivar):
         """
         Input shapes:
           inp:  (b, t, m, d)
@@ -309,7 +329,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
           return: (b, t, m, d)
         """
         # Attention over timestamps
-        out = self.seqAttention(inp, pos, mask)  # (b, t, m, p)
+        out = self.seqAttention(inp, pos, mask, equivar)  # (b, t, m, p)
         # Attention over modalities
         out = self.modAttention(out, mask)   # (b, t, m, p)
         # Linear projection to encoding dimension
