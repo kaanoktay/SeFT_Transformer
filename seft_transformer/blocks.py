@@ -44,8 +44,6 @@ class PosEncodingBlock(layers.Layer):
             # Construct positional encodings
             pos_enc = rearrange(
                 [sin_enc, cos_enc],  'z b t k -> b t 1 (k z)')
-            pos_enc = rearrange(
-                pos_enc, 'b t d -> b t 1 d')
             return pos_enc  # (b, t, 1, d)
 
 
