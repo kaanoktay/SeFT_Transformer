@@ -24,16 +24,16 @@ def parse_arguments():
         description='Embedding Translational Equivariance to SeFT')
     parser.add_argument('--batch_size', type=int, default=16,
                         metavar="16", help='batch size')
-    parser.add_argument('--num_epochs', type=int, default=500,
-                        metavar="500", help='number of epochs')
+    parser.add_argument('--num_epochs', type=int, default=200,
+                        metavar="200", help='number of epochs')
     parser.add_argument('--init_lr', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
     parser.add_argument('--lr_decay_rate', type=float, default=0.25,
                         metavar="0.25", help='decay rate of learning rate')
     parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
                         metavar="2e3", help='learning rate warmup steps')
-    parser.add_argument('--dropout_rate', type=float, default=0.2,
-                        metavar="0.2", help='dropout rate')
+    parser.add_argument('--dropout_rate', type=float, default=0.1,
+                        metavar="0.1", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
                         metavar="reZero", help='normalization type')
     parser.add_argument('--dataset', type=str, default='physionet2012',
@@ -54,15 +54,15 @@ def main():
 
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
-    num_epochs = args.num_epochs  # Default: 500
+    num_epochs = args.num_epochs  # Default: 200
     init_lr = args.init_lr  # Default: 1e-4
     lr_decay_rate = args.lr_decay_rate  # Default: 0.25
     lr_warmup_steps = args.lr_warmup_steps  # Default: 2e3
-    dropout_rate = args.dropout_rate  # Default: 0.2
+    dropout_rate = args.dropout_rate  # Default: 0.1
     norm_type = args.norm_type  # Default: 'reZero'
     dataset = args.dataset  # Default: 'physionet2012'
     equivariance = args.equivariance  # Default: False
-    num_layers = args.num_layers  # Default: 32
+    num_layers = args.num_layers  # Default: 1
     proj_dim = args.proj_dim  # Default: 32
     num_heads = args.num_heads  # Default: 2
 
@@ -87,7 +87,8 @@ def main():
         'ex_batchSize_' + str(batch_size) +
         '_projDim_' + str(proj_dim) +
         '_transEq_' + str(equivariance) +
-        '_numHeads_' + str(num_heads) +
+        '_numHead_' + str(num_heads) +
+        '_dropRate_' + str(dropout_rate) +
         '_normType_' + norm_type
     )
 
