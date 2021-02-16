@@ -84,6 +84,7 @@ def main():
     # Experiment logs folder
     experiment_log = os.path.join(
         log_dir,
+        dataset,
         'ex_batchSize_' + str(batch_size) +
         '_projDim_' + str(proj_dim) +
         '_transEq_' + str(equivariance) +
