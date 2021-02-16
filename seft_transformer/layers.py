@@ -147,7 +147,7 @@ class ClassPredictionLayer(layers.Layer):
         if self.causal_mask:
             norm = reduce(mask, 'b t m 1-> b t 1', 'sum')
             out = out / norm  # (b, t, d)
-            out = tf.where(tf.math.is_nan(out), 0, out)
+            out = tf.where(tf.math.is_nan(out), 0.0, out)
         else:
             norm = reduce(mask, 'b t m 1-> b 1', 'sum')
             out = out / norm  # (b, d)
