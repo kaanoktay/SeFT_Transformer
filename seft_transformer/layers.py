@@ -14,16 +14,18 @@ from .blocks import (
 
 
 class InputEmbedding(layers.Layer):
-    def __init__(self, enc_dim=128):
+    def __init__(self, enc_dim=128, equivar=False, no_time=False):
         super(InputEmbedding, self).__init__()
         self.pos_encoding = PosEncodingBlock(
-            enc_dim=enc_dim)
+            enc_dim=enc_dim, equivar=equivar)
         self.inp_encoding = InpEncodingBlock(
             enc_dim=enc_dim)
         self.mod_encoding = ModEncodingBlock(
             enc_dim=enc_dim)
+        self.equivar = equivar
+        self.no_time = no_time
 
-    def call(self, inp, time, mask, equivar):
+    def call(self, inp, time, mask):
         """
         Input shapes:
           inp:  (b, t, m, i)
@@ -31,15 +33,18 @@ class InputEmbedding(layers.Layer):
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, d), (b, t, t, d) if equivar
-                  (b, t, m, d)               else
+                  (b, t, m, d), None         else
         """
-        pos_enc = self.pos_encoding(time, equivar)
+        pos_enc = self.pos_encoding(time)
         inp_enc = self.inp_encoding(inp)
         mod_enc = self.mod_encoding(inp)
-        if equivar:
-            return inp_enc + mod_enc, pos_enc
+        if self.no_time:
+            return inp_enc + mod_enc, None
         else:
-            return inp_enc + mod_enc + pos_enc
+            if self.equivar:
+                return inp_enc + mod_enc, pos_enc
+            else:
+                return inp_enc + mod_enc + pos_enc, None
 
 
 class ReZero(layers.Layer):
@@ -57,12 +62,13 @@ class ReZero(layers.Layer):
 class AxialAttentionEncoderLayer(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, 
                  num_head=4, ff_dim=128, drop_rate=0.2, 
-                 norm_type="reZero", causal_mask=False):
+                 norm_type="reZero", causal_mask=False,
+                 equivar=False):
         super(AxialAttentionEncoderLayer, self).__init__()
         self.axAttention = AxialMultiHeadAttentionBlock(
             proj_dim=proj_dim, enc_dim=enc_dim,
             num_head=num_head, drop_rate=drop_rate,
-            causal_mask=causal_mask
+            causal_mask=causal_mask, equivar=equivar
         )
         self.posFeedforward = PosFeedforwardBlock(
             enc_dim=enc_dim, ff_dim=ff_dim,
@@ -89,7 +95,7 @@ class AxialAttentionEncoderLayer(layers.Layer):
         self.residual1 = get_residual()
         self.residual2 = get_residual()
 
-    def call(self, inp, pos, mask, equivar):
+    def call(self, inp, pos, mask):
         """
         Input shapes:
           inp:  (b, t, m, d)
@@ -99,7 +105,7 @@ class AxialAttentionEncoderLayer(layers.Layer):
           return: (b, t, m, d)
         """
         # Calculate attention and apply residual + normalization
-        attn = self.axAttention(inp, pos, mask, equivar)  # (b, t, m, d)
+        attn = self.axAttention(inp, pos, mask)  # (b, t, m, d)
         attn = self.norm1(self.residual1(inp, attn))  # (b, t, m, d)
         # Calculate positionwise feedforward and apply residual + normalization
         attn_ffn = self.posFeedforward(attn)  # (b, t, m, d)

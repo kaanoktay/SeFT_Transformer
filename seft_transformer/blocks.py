@@ -8,14 +8,15 @@ import sys
 
 class PosEncodingBlock(layers.Layer):
     """Layer for the computation of positional encodings."""
-    def __init__(self, enc_dim=128):
+    def __init__(self, enc_dim=128, equivar=False):
         super(PosEncodingBlock, self).__init__()
         self.f = tf.math.exp(
             tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
             * -(tf.math.log(10000.0) / enc_dim)
         )
+        self.equivar = equivar
 
-    def call(self, time, equivar):
+    def call(self, time):
         """
         Input shapes:
           time: (b, t)
@@ -23,7 +24,7 @@ class PosEncodingBlock(layers.Layer):
           return: (b, t, t, d) if equivar
                   (b, t, 1, d) else
         """
-        if equivar:
+        if self.equivar:
             rel_time = rearrange(time, 'b t -> b t 1') - \
                 rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
             # Calculate sine and cosine components
@@ -117,14 +118,15 @@ class ModEncodingBlock(layers.Layer):
 
 
 class SeqAttentionBlock(layers.Layer):
-    def __init__(self, proj_dim=128, num_head=4, 
-                 drop_rate=0.2, causal_mask=False):
+    def __init__(self, proj_dim=128, num_head=4, drop_rate=0.2, 
+                 causal_mask=False, equivar=False):
         super().__init__()
         self.proj_dim = proj_dim
         self.num_head = num_head
         self.embed_dim = proj_dim // num_head
         self.dropout = layers.Dropout(drop_rate)
         self.causal_mask = causal_mask
+        self.equivar = equivar
 
     def build(self, input_shape):
         # Input shapes
@@ -167,9 +169,10 @@ class SeqAttentionBlock(layers.Layer):
             trainable=True
         )
         # Dense layers: time
-        self.time_dense = layers.Dense(self.proj_dim)
+        if self.equivar:
+            self.time_dense = layers.Dense(self.proj_dim)
 
-    def call(self, inp, pos, mask, equivar):
+    def call(self, inp, pos, mask):
         """
         Input shapes:
           inp:  (b, t, m, d)
@@ -182,7 +185,7 @@ class SeqAttentionBlock(layers.Layer):
         q = tf.linalg.matvec(self.Wq, inp) + self.Bq
         k = tf.linalg.matvec(self.Wk, inp) + self.Bk
         v = tf.linalg.matvec(self.Wv, inp) + self.Bv
-        if equivar:
+        if self.equivar:
             t = self.time_dense(pos)
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
@@ -191,11 +194,11 @@ class SeqAttentionBlock(layers.Layer):
                       h=self.num_head)  # (b, m, h, t, e)
         v = rearrange(v, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
-        if equivar:
+        if self.equivar:
             t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
                           h=self.num_head)  # (b, 1, h, t, t, e)
         # Calculate attention
-        if equivar:
+        if self.equivar:
             score = tf.einsum('...ij,...kj->...ik', q, k) + \
                 tf.linalg.matvec(t, q)
         else:
@@ -286,11 +289,11 @@ class ModAttentionBlock(layers.Layer):
 
 class AxialMultiHeadAttentionBlock(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
-                 drop_rate=0.2, causal_mask=False):
+                 drop_rate=0.2, causal_mask=False, equivar=False):
         super().__init__()
         self.seqAttention = SeqAttentionBlock(
-            proj_dim=proj_dim, num_head=num_head, 
-            drop_rate=drop_rate, causal_mask=causal_mask
+            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate, 
+            causal_mask=causal_mask, equivar=equivar
         )
         self.modAttention = ModAttentionBlock(
             proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate
@@ -316,7 +319,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
             trainable=True
         )
 
-    def call(self, inp, pos, mask, equivar):
+    def call(self, inp, pos, mask):
         """
         Input shapes:
           inp:  (b, t, m, d)
@@ -327,7 +330,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
           return: (b, t, m, d)
         """
         # Attention over timestamps
-        out = self.seqAttention(inp, pos, mask, equivar)  # (b, t, m, p)
+        out = self.seqAttention(inp, pos, mask)  # (b, t, m, p)
         # Attention over modalities
         out = self.modAttention(out, mask)   # (b, t, m, p)
         # Linear projection to encoding dimension

@@ -17,25 +17,24 @@ class TimeSeriesTransformer(keras.Model):
     def __init__(self, proj_dim=128, num_head=4, enc_dim=128, 
                  pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.2, 
                  norm_type='reZero', dataset='physionet2012',
-                 equivar=False, num_layers=1):
+                 equivar=False, num_layers=1, no_time=False):
         super(TimeSeriesTransformer, self).__init__()
         if dataset=='physionet2019':
             self.causal_mask = True
         else:
             self.causal_mask = False
         self.input_embedding = InputEmbedding(
-            enc_dim=enc_dim
+            enc_dim=enc_dim, equivar=equivar, no_time=no_time
         )
         self.transformer_encoder = AxialAttentionEncoderLayer(
             proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
             ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type,
-            causal_mask=self.causal_mask
+            causal_mask=self.causal_mask, equivar=equivar
         )
         self.class_prediction = ClassPredictionLayer(
             ff_dim=pred_ff_dim, drop_rate=drop_rate,
             causal_mask=self.causal_mask
         )
-        self.equivar = equivar
     
     def train_step(self, data):
         x, y = data 
@@ -90,15 +89,11 @@ class TimeSeriesTransformer(keras.Model):
         if len(inp.shape) == 3:
             inp = rearrange(inp, 'b t m -> b t m 1')
         # Encode inputs
-        encodings = self.input_embedding(
-            inp, time, mask, self.equivar)
-        if self.equivar:
-            inp_enc, pos_enc = encodings
-        else:
-            inp_enc, pos_enc = encodings, None
+        inp_enc, pos_enc = self.input_embedding(
+            inp, time, mask)
         # Calculate attention
         attn = self.transformer_encoder(
-            inp_enc, pos_enc, mask, self.equivar)
+            inp_enc, pos_enc, mask)
         # Make prediction: if causal_mask (b, t, 1) else (b, 1)
         pred = self.class_prediction(attn, mask)
         if self.causal_mask:
