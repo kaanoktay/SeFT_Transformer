@@ -52,7 +52,7 @@ def parse_arguments():
     parser.add_argument('--equivariance', dest='equivariance', 
                         action='store_true')
     parser.add_argument('--no_time', dest='no_time', 
-                        action='store_false')
+                        action='store_true')
     parser.set_defaults(equivariance=False, no_time=False)
 
     return parser.parse_args()
