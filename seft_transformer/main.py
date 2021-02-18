@@ -148,7 +148,7 @@ def main():
 
     # Callback for reducing the learning rate when loss get stuck in a plateau
     lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
-        monitor='loss',
+        monitor='val_loss',
         mode='min',
         factor=lr_decay_rate,
         patience=6,
