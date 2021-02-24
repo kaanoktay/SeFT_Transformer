@@ -61,6 +61,9 @@ def main():
     """Parse command line arguments and train model."""
     args = parse_arguments()
 
+    # Add hyperparameters to wandb config
+    wandb.config.update(args)
+
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
     num_epochs = args.num_epochs  # Default: 200
