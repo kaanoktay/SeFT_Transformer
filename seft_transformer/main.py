@@ -192,8 +192,8 @@ def main():
                    model_checkpoint_callback,
                    lr_schedule_callback,
                    lr_warmup_callback,
-                   lr_logger_callback,
-                   WandbCallback()]
+                   WandbCallback(),
+                   lr_logger_callback]
     )
 
     model.save(os.path.join(wandb.run.dir, "model.h5"))

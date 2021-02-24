@@ -133,7 +133,7 @@ class SeqAttentionBlock(layers.Layer):
         input_dim = input_shape[-1]
         num_mod = input_shape[-2]
         # Weight and bias initializers
-        w_init = tf.random_normal_initializer()
+        w_init = tf.keras.initializers.glorot_uniform()
         b_init = tf.zeros_initializer()
         # Weight matrix and bias: query
         self.Wq = tf.Variable(
@@ -168,9 +168,20 @@ class SeqAttentionBlock(layers.Layer):
                 shape=(num_mod, self.proj_dim), dtype="float32"),
             trainable=True
         )
-        # Dense layers: time
         if self.equivar:
+            # Dense layers: time encodings
             self.time_dense = layers.Dense(self.proj_dim)
+            # Weight matrix and bias: query/key for time
+            self.Wt = tf.Variable(
+                initial_value=w_init(
+                    shape=(num_mod, self.proj_dim, input_dim), dtype="float32"),
+                trainable=True
+            )
+            self.Bt = tf.Variable(
+                initial_value=b_init(
+                    shape=(num_mod, self.proj_dim), dtype="float32"),
+                trainable=True
+            )
 
     def call(self, inp, pos, mask):
         """
@@ -185,8 +196,6 @@ class SeqAttentionBlock(layers.Layer):
         q = tf.linalg.matvec(self.Wq, inp) + self.Bq
         k = tf.linalg.matvec(self.Wk, inp) + self.Bk
         v = tf.linalg.matvec(self.Wv, inp) + self.Bv
-        if self.equivar:
-            t = self.time_dense(pos)
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
@@ -194,15 +203,17 @@ class SeqAttentionBlock(layers.Layer):
                       h=self.num_head)  # (b, m, h, t, e)
         v = rearrange(v, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
+        # Calculate attention
+        score = tf.einsum('...ij,...kj->...ik', q, k)
         if self.equivar:
+            # Project query/key for time
+            q_t = tf.linalg.matvec(self.Wt, inp) + self.Bt
+            q_t = rearrange(q_t, 'b t m (h e) -> b m h t e',
+                            h=self.num_head)  # (b, m, h, t, e)
+            t = self.time_dense(pos)
             t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
                           h=self.num_head)  # (b, 1, h, t, t, e)
-        # Calculate attention
-        if self.equivar:
-            score = tf.einsum('...ij,...kj->...ik', q, k) + \
-                tf.linalg.matvec(t, q)
-        else:
-            score = tf.einsum('...ij,...kj->...ik', q, k)
+            score = score + tf.linalg.matvec(t, q_t)
         score = score / (self.embed_dim**0.5)  # (b, m, h, t, t)
         causal_mask = None
         if self.causal_mask:
