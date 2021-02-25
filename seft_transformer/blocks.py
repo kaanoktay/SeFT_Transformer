@@ -8,6 +8,7 @@ import sys
 
 class PosEncodingBlock(layers.Layer):
     """Layer for the computation of positional encodings."""
+
     def __init__(self, enc_dim=128, equivar=False):
         super(PosEncodingBlock, self).__init__()
         self.f = tf.math.exp(
@@ -170,7 +171,28 @@ class SeqAttentionBlock(layers.Layer):
         )
         # Dense layers: time
         if self.equivar:
-            self.time_dense = layers.Dense(self.proj_dim)
+            # Follow transformer XL approach
+            self.W_k_r = tf.Variable(
+                initial_value=w_init(
+                    shape=(1, num_mod, 1, 1, self.proj_dim, input_dim),
+                    dtype='float32'
+                ),
+                trainable=True
+            )
+            self.u = tf.Variable(
+                initial_value=b_init(
+                    shape=(1, num_mod, self.num_head, self.embed_dim),
+                    dtype='float32'
+                ),
+                trainable=True
+            )
+            self.v = tf.Variable(
+                initial_value=b_init(
+                    shape=(1, num_mod, self.num_head, 1, self.embed_dim),
+                    dtype='float32'
+                ),
+                trainable=True
+            )
 
     def call(self, inp, pos, mask):
         """
@@ -185,8 +207,6 @@ class SeqAttentionBlock(layers.Layer):
         q = tf.linalg.matvec(self.Wq, inp) + self.Bq
         k = tf.linalg.matvec(self.Wk, inp) + self.Bk
         v = tf.linalg.matvec(self.Wv, inp) + self.Bv
-        if self.equivar:
-            t = self.time_dense(pos)
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
@@ -194,15 +214,21 @@ class SeqAttentionBlock(layers.Layer):
                       h=self.num_head)  # (b, m, h, t, e)
         v = rearrange(v, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
-        if self.equivar:
-            t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
-                          h=self.num_head)  # (b, 1, h, t, t, e)
         # Calculate attention
+        score = tf.einsum('...ij,...kj->...ik', q, k)
+
         if self.equivar:
-            score = tf.einsum('...ij,...kj->...ik', q, k) + \
-                tf.linalg.matvec(t, q)
-        else:
-            score = tf.einsum('...ij,...kj->...ik', q, k)
+            k_r = tf.linalg.matvec(self.W_k_r, pos[:, None, ...])
+            k_r = rearrange(
+                k_r, 'b m t1 t2 (h e) -> b m h t1 t2 e', h=self.num_head)
+            score += (
+                # Add them instead of doing separate steps, this is
+                # mathematically equivalent but saves the computation of an
+                # additional NxN matrix.
+                tf.linalg.matvec(k_r, q + self.v)
+                # Broadcast to all t2 values
+                + tf.linalg.matvec(k, self.u)[..., None]
+            )
         score = score / (self.embed_dim**0.5)  # (b, m, h, t, t)
         causal_mask = None
         if self.causal_mask:
@@ -224,7 +250,7 @@ class SeqAttentionBlock(layers.Layer):
             tensor=weight,
             message="Check the values after softmax"
         )
-        #Apply dropout
+        # Apply dropout
         weight = self.dropout(weight)
         out = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, m, h, t, e)
         # Concatenate heads
@@ -278,7 +304,7 @@ class ModAttentionBlock(layers.Layer):
             tensor=weight,
             message="Check the values after softmax"
         )
-        #Apply dropout
+        # Apply dropout
         weight = self.dropout(weight)
         out = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, t, h, m, e)
         # Concatenate heads
@@ -288,11 +314,11 @@ class ModAttentionBlock(layers.Layer):
 
 
 class AxialMultiHeadAttentionBlock(layers.Layer):
-    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
+    def __init__(self, proj_dim=128, enc_dim=128, num_head=4,
                  drop_rate=0.2, causal_mask=False, equivar=False):
         super().__init__()
         self.seqAttention = SeqAttentionBlock(
-            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate, 
+            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate,
             causal_mask=causal_mask, equivar=equivar
         )
         self.modAttention = ModAttentionBlock(

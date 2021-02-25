@@ -82,7 +82,7 @@ def main():
 
     train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = \
         transformation._prepare_dataset_for_training()
-    
+
     # Initialize the model
     model = TimeSeriesTransformer(
         proj_dim=proj_dim, num_head=num_heads,
@@ -207,6 +207,6 @@ def main():
     )
     print("\n")
 
+
 if __name__ == "__main__":
     main()
-    
