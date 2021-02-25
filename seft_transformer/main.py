@@ -53,7 +53,9 @@ def parse_arguments():
                         action='store_true')
     parser.add_argument('--no_time', dest='no_time', 
                         action='store_true')
-    parser.set_defaults(equivariance=False, no_time=False)
+    parser.add_argument('--uni_mod', dest='uni_mod',
+                        action='store_true')
+    parser.set_defaults(equivariance=False, no_time=False, uni_mod=False)
 
     return parser.parse_args()
 
@@ -78,6 +80,7 @@ def main():
     num_heads = args.num_heads  # Default: 2
     equivariance = args.equivariance  # Default: False
     no_time = args.no_time  # Default: False
+    uni_mod = args.uni_mod  # Default: False
 
     # Load data
     transformation = Preprocessing(
@@ -93,7 +96,7 @@ def main():
         pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
         norm_type=norm_type, dataset=dataset,
         equivar=equivariance, num_layers=num_layers,
-        no_time=no_time
+        no_time=no_time, uni_mod=uni_mod
     )
 
     # Experiment logs folder
@@ -106,6 +109,7 @@ def main():
         '_numHead_' + str(num_heads) +
         '_dropRate_' + str(dropout_rate) +
         '_normType_' + norm_type +
+        '_uniMod_' + str(uni_mod) +
         '_timeEnc_' + str(not no_time)
     )
 
@@ -154,7 +158,7 @@ def main():
         monitor='val_loss',
         mode='min',
         factor=lr_decay_rate,
-        patience=6,
+        patience=7,
         min_lr=1e-8
     )
 

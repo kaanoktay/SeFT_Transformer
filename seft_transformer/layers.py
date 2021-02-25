@@ -6,20 +6,28 @@ import sys
 
 from .blocks import (
     AxialMultiHeadAttentionBlock,
+    UniAxialMultiHeadAttentionBlock,
     PosEncodingBlock,
+    UniInpEncodingBlock,
     InpEncodingBlock,
     ModEncodingBlock,
+    UniPosFeedforwardBlock,
     PosFeedforwardBlock
 )
 
 
 class InputEmbedding(layers.Layer):
-    def __init__(self, enc_dim=128, equivar=False, no_time=False):
+    def __init__(self, enc_dim=128, equivar=False, 
+                 no_time=False, uni_mod=False):
         super(InputEmbedding, self).__init__()
         self.pos_encoding = PosEncodingBlock(
             enc_dim=enc_dim, equivar=equivar)
-        self.inp_encoding = InpEncodingBlock(
-            enc_dim=enc_dim)
+        if uni_mod:
+            self.inp_encoding = UniInpEncodingBlock(
+                enc_dim=enc_dim)
+        else:
+            self.inp_encoding = InpEncodingBlock(
+                enc_dim=enc_dim)
         self.mod_encoding = ModEncodingBlock(
             enc_dim=enc_dim)
         self.equivar = equivar
@@ -63,17 +71,28 @@ class AxialAttentionEncoderLayer(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, 
                  num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False,
-                 equivar=False):
+                 equivar=False, uni_mod=False):
         super(AxialAttentionEncoderLayer, self).__init__()
-        self.axAttention = AxialMultiHeadAttentionBlock(
-            proj_dim=proj_dim, enc_dim=enc_dim,
-            num_head=num_head, drop_rate=drop_rate,
-            causal_mask=causal_mask, equivar=equivar
-        )
-        self.posFeedforward = PosFeedforwardBlock(
-            enc_dim=enc_dim, ff_dim=ff_dim,
-            drop_rate=drop_rate
-        )
+        if uni_mod:
+            self.axAttention = UniAxialMultiHeadAttentionBlock(
+                proj_dim=proj_dim, enc_dim=enc_dim,
+                num_head=num_head, drop_rate=drop_rate,
+                causal_mask=causal_mask, equivar=equivar,
+            )
+            self.posFeedforward = UniPosFeedforwardBlock(
+                enc_dim=enc_dim, ff_dim=ff_dim,
+                drop_rate=drop_rate
+            )
+        else:
+            self.axAttention = AxialMultiHeadAttentionBlock(
+                proj_dim=proj_dim, enc_dim=enc_dim,
+                num_head=num_head, drop_rate=drop_rate,
+                causal_mask=causal_mask, equivar=equivar,
+            )
+            self.posFeedforward = PosFeedforwardBlock(
+                enc_dim=enc_dim, ff_dim=ff_dim,
+                drop_rate=drop_rate
+            )
         
         if norm_type == 'layerNorm':
             def get_residual():
@@ -123,8 +142,6 @@ class ClassPredictionLayer(layers.Layer):
         self.causal_mask = causal_mask
 
     def build(self, input_shape):
-        # Dense layer to aggregate different modalities
-        self.denseMod = layers.Dense(1)
         # Dense layers to predict classes
         self.densePred1 = layers.Dense(self.ff_dim, activation='relu')
         self.densePred2 = layers.Dense(1, activation='sigmoid')
@@ -158,5 +175,6 @@ class ClassPredictionLayer(layers.Layer):
             norm = reduce(mask, 'b t m 1-> b 1', 'sum')
             out = out / norm  # (b, d)
         # Predict the class
+        # Project to an intermediate dimension
         pred = self.densePred2(self.densePred1(self.dropout(out)))
         return pred  # if causal_mask (b, t, 1) else (b, 1)
