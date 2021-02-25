@@ -314,7 +314,8 @@ class UniSeqAttentionBlock(layers.Layer):
             t = self.time_dense(pos)
             t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
                           h=self.num_head)  # (b, 1, h, t, t, e)
-            score = score + tf.linalg.matvec(t, q_t)/(self.embed_dim**0.5)
+            score = score + \
+                tf.einsum('...ij,...j->...i', t, q_t)/(self.embed_dim**0.5)
         # Apply mask and causal mask if needed
         causal_mask = None
         if self.causal_mask:
