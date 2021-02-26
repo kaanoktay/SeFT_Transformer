@@ -1,0 +1,29 @@
+{
+    "os": "Darwin-20.3.0-x86_64-i386-64bit",
+    "python": "3.7.7",
+    "heartbeatAt": "2021-02-26T14:41:44.125622",
+    "startedAt": "2021-02-26T14:41:40.546287",
+    "docker": null,
+    "cpu_count": 4,
+    "cuda": null,
+    "args": [
+        "--batch_size",
+        "4",
+        "--proj_dim",
+        "8",
+        "--dataset",
+        "physionet2012",
+        "--equivariance"
+    ],
+    "state": "running",
+    "program": "<python with no main file>",
+    "git": {
+        "remote": "git@github.com:kaanoktay/SeFT_Transformer.git",
+        "commit": "37c0758d8c0ca579356692ae9a6b06c18ee180cd"
+    },
+    "email": "kaan.oktay@boun.edu.tr",
+    "root": "/Users/kaanoktay/Desktop/Master/SeFT_Transformer",
+    "host": "kaans-macbook-pro.home",
+    "username": "kaanoktay",
+    "executable": "/Users/kaanoktay/Library/Caches/pypoetry/virtualenvs/seft-transformer-nGNhFbr3-py3.7/bin/python"
+}

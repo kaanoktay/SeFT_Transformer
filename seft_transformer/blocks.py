@@ -7,7 +7,8 @@ import sys
 
 
 class PosEncodingBlock(layers.Layer):
-    """Layer for the computation of positional encodings."""
+    """Positional encodings layer."""
+
     def __init__(self, enc_dim=128, equivar=False):
         super(PosEncodingBlock, self).__init__()
         self.f = tf.math.exp(
@@ -49,7 +50,7 @@ class PosEncodingBlock(layers.Layer):
 
 
 class InpEncodingBlock(layers.Layer):
-    """Layer for the computation of input encodings."""
+    """Input encodings layer."""
 
     def __init__(self, enc_dim=128):
         super(InpEncodingBlock, self).__init__()
@@ -87,7 +88,8 @@ class InpEncodingBlock(layers.Layer):
 
 
 class UniInpEncodingBlock(layers.Layer):
-    """Layer for the computation of input encodings."""
+    """Input encodings layer with the same 
+    projection for all modalities."""
 
     def __init__(self, enc_dim=128):
         super(UniInpEncodingBlock, self).__init__()
@@ -106,7 +108,7 @@ class UniInpEncodingBlock(layers.Layer):
 
 
 class ModEncodingBlock(layers.Layer):
-    """Layer for the computation of modality encodings."""
+    """Modality encodings layer."""
 
     def __init__(self, enc_dim=128):
         super(ModEncodingBlock, self).__init__()
@@ -137,6 +139,8 @@ class ModEncodingBlock(layers.Layer):
 
 
 class SeqAttentionBlock(layers.Layer):
+    """Sequential attention layer."""
+
     def __init__(self, proj_dim=128, num_head=4, drop_rate=0.2, 
                  causal_mask=False, equivar=False):
         super().__init__()
@@ -188,6 +192,7 @@ class SeqAttentionBlock(layers.Layer):
             trainable=True
         )
         if self.equivar:
+            """Previous approach
             # Dense layers: time encodings
             self.time_dense = layers.Dense(self.proj_dim)
             # Weight matrix and bias: query/key for time
@@ -199,6 +204,29 @@ class SeqAttentionBlock(layers.Layer):
             self.Bt = tf.Variable(
                 initial_value=b_init(
                     shape=(num_mod, self.proj_dim), dtype="float32"),
+                trainable=True
+            )
+            """
+            # Transformer XL approach
+            self.W_k_r = tf.Variable(
+                initial_value=w_init(
+                    shape=(1, num_mod, 1, 1, self.proj_dim, input_dim),
+                    dtype='float32'
+                ),
+                trainable=True
+            )
+            self.u = tf.Variable(
+                initial_value=b_init(
+                    shape=(1, num_mod, self.num_head, self.embed_dim),
+                    dtype='float32'
+                ),
+                trainable=True
+            )
+            self.v = tf.Variable(
+                initial_value=b_init(
+                    shape=(1, num_mod, self.num_head, 1, self.embed_dim),
+                    dtype='float32'
+                ),
                 trainable=True
             )
 
@@ -225,7 +253,9 @@ class SeqAttentionBlock(layers.Layer):
         # Calculate attention scores
         score = tf.einsum('...ij,...kj->...ik', q, k)
         score = score / (self.embed_dim**0.5)  # (b, m, h, t, t)
+
         if self.equivar:
+            """Previous approach
             # Project query/key for time
             q_t = tf.linalg.matvec(self.Wt, inp) + self.Bt
             q_t = rearrange(q_t, 'b t m (h e) -> b m h t e',
@@ -234,6 +264,18 @@ class SeqAttentionBlock(layers.Layer):
             t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
                           h=self.num_head)  # (b, 1, h, t, t, e)
             score = score + tf.linalg.matvec(t, q_t)/(self.embed_dim**0.5)
+            """
+            k_r = tf.linalg.matvec(self.W_k_r, pos[:, None, ...])
+            k_r = rearrange(
+                k_r, 'b m t1 t2 (h e) -> b m h t1 t2 e', h=self.num_head)
+            score += (
+                # Add them instead of doing separate steps, this is
+                # mathematically equivalent but saves the computation of an
+                # additional NxN matrix.
+                tf.linalg.matvec(k_r, q + self.v)
+                # Broadcast to all t2 values
+                + tf.linalg.matvec(k, self.u)[..., None]
+            ) / (self.embed_dim**0.5)
         # Apply mask and causal mask if needed
         causal_mask = None
         if self.causal_mask:
@@ -255,6 +297,7 @@ class SeqAttentionBlock(layers.Layer):
         tf.debugging.check_numerics(
             tensor=weight,
             message="Check the values after softmax")
+        # Apply dropout
         weight = self.dropout(weight)
         # Calculate attention output
         out = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, m, h, t, e)
@@ -265,6 +308,9 @@ class SeqAttentionBlock(layers.Layer):
 
 
 class UniSeqAttentionBlock(layers.Layer):
+    """Sequential attention layer with the
+    same projection for all modalities."""
+
     def __init__(self, proj_dim=128, num_head=4, drop_rate=0.2, 
                  causal_mask=False, equivar=False):
         super().__init__()
@@ -337,6 +383,7 @@ class UniSeqAttentionBlock(layers.Layer):
             tensor=weight,
             message="Check the values after softmax"
         )
+        # Apply dropout
         weight = self.dropout(weight)
         # Calculate attention output
         out = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, m, h, t, e)
@@ -347,6 +394,8 @@ class UniSeqAttentionBlock(layers.Layer):
 
 
 class ModAttentionBlock(layers.Layer):
+    """Modality attention layer."""
+
     def __init__(self, proj_dim=128, num_head=4, drop_rate=0.2):
         super().__init__()
         self.proj_dim = proj_dim
@@ -392,6 +441,7 @@ class ModAttentionBlock(layers.Layer):
             tensor=weight,
             message="Check the values after softmax"
         )
+        # Apply dropout
         weight = self.dropout(weight)
         # Calculate attention outputs
         out = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, t, h, m, e)
@@ -402,6 +452,9 @@ class ModAttentionBlock(layers.Layer):
 
 
 class UniAxialMultiHeadAttentionBlock(layers.Layer):
+    """Multi head attention later with the
+    same projection for all modalities."""
+
     def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
                  drop_rate=0.2, causal_mask=False, equivar=False):
         super().__init__()
@@ -435,11 +488,13 @@ class UniAxialMultiHeadAttentionBlock(layers.Layer):
 
 
 class AxialMultiHeadAttentionBlock(layers.Layer):
-    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
+    """Multi head attention layer."""
+
+    def __init__(self, proj_dim=128, enc_dim=128, num_head=4,
                  drop_rate=0.2, causal_mask=False, equivar=False):
         super().__init__()
         self.seqAttention = SeqAttentionBlock(
-            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate, 
+            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate,
             causal_mask=causal_mask, equivar=equivar
         )
         self.modAttention = ModAttentionBlock(
@@ -452,7 +507,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
         input_dim = input_shape[-1]
         num_mod = input_shape[-2]
         # Weight and bias initializers
-        w_init = tf.random_normal_initializer()
+        w_init = tf.keras.initializers.glorot_uniform()
         b_init = tf.zeros_initializer()
         # Weight matrix and bias: map proj_dim to data_dim (=enc_dim)
         self.W = tf.Variable(
@@ -486,6 +541,9 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
 
 
 class UniPosFeedforwardBlock(layers.Layer):
+    """Positional feedforward network layer
+    with same dense layer for all modalities."""
+
     def __init__(self, enc_dim=128, ff_dim=128, drop_rate=0.2):
         super().__init__()
         self.enc_dim = enc_dim
@@ -509,6 +567,8 @@ class UniPosFeedforwardBlock(layers.Layer):
 
 
 class PosFeedforwardBlock(layers.Layer):
+    """Positional feedforward network layer."""
+
     def __init__(self, enc_dim=128, ff_dim=128, drop_rate=0.2):
         super().__init__()
         self.enc_dim = enc_dim
@@ -521,7 +581,7 @@ class PosFeedforwardBlock(layers.Layer):
         input_dim = input_shape[-1]
         num_mod = input_shape[-2]
         # Weight and bias initializers
-        w_init = tf.random_normal_initializer()
+        w_init = tf.keras.initializers.glorot_uniform()
         b_init = tf.zeros_initializer()
         # Weight matrix and bias: 1st feedforward layer
         self.W1 = tf.Variable(
