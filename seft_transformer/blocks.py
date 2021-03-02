@@ -210,21 +210,21 @@ class SeqAttentionBlock(layers.Layer):
             # Transformer XL approach
             self.W_k_r = tf.Variable(
                 initial_value=w_init(
-                    shape=(1, num_mod, 1, 1, self.proj_dim, input_dim),
+                    shape=(num_mod, 1, 1, self.proj_dim, input_dim),
                     dtype='float32'
                 ),
                 trainable=True
             )
             self.u = tf.Variable(
                 initial_value=b_init(
-                    shape=(1, num_mod, self.num_head, self.embed_dim),
+                    shape=(num_mod, self.num_head, self.embed_dim),
                     dtype='float32'
                 ),
                 trainable=True
             )
             self.v = tf.Variable(
                 initial_value=b_init(
-                    shape=(1, num_mod, self.num_head, 1, self.embed_dim),
+                    shape=(num_mod, self.num_head, 1, self.embed_dim),
                     dtype='float32'
                 ),
                 trainable=True
