@@ -12,7 +12,7 @@ from .callbacks import WarmUpScheduler, LearningRateLogger
 
 import wandb
 from wandb.keras import WandbCallback
-wandb.init(project="master_thesis_kaan", entity="borgwardt")
+#wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
 from tensorflow.python.util import deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
@@ -64,7 +64,7 @@ def main():
     args = parse_arguments()
 
     # Add hyperparameters to wandb config
-    wandb.config.update(args)
+    #wandb.config.update(args)
 
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
@@ -144,6 +144,8 @@ def main():
                  keras.metrics.AUC(curve='ROC', name='auroc')]
     )
 
+    model.run_eagerly=True
+
     # Callback for logging the learning rate for inspection
     lr_logger_callback = LearningRateLogger()
 
@@ -199,7 +201,7 @@ def main():
                    model_checkpoint_callback,
                    lr_schedule_callback,
                    lr_warmup_callback,
-                   WandbCallback(),
+                   #WandbCallback(),
                    lr_logger_callback]
     )
 

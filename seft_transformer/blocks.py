@@ -210,21 +210,21 @@ class SeqAttentionBlock(layers.Layer):
             # Transformer XL approach
             self.W_k_r = tf.Variable(
                 initial_value=w_init(
-                    shape=(num_mod, 1, 1, self.proj_dim, input_dim),
+                    shape=(1, num_mod, 1, 1, self.proj_dim, input_dim),
                     dtype='float32'
                 ),
                 trainable=True
             )
             self.u = tf.Variable(
                 initial_value=b_init(
-                    shape=(num_mod, self.num_head, self.embed_dim),
+                    shape=(1, num_mod, self.num_head, self.embed_dim),
                     dtype='float32'
                 ),
                 trainable=True
             )
             self.v = tf.Variable(
                 initial_value=b_init(
-                    shape=(num_mod, self.num_head, 1, self.embed_dim),
+                    shape=(1, num_mod, self.num_head, 1, self.embed_dim),
                     dtype='float32'
                 ),
                 trainable=True
@@ -268,6 +268,11 @@ class SeqAttentionBlock(layers.Layer):
             k_r = tf.linalg.matvec(self.W_k_r, pos[:, None, ...])
             k_r = rearrange(
                 k_r, 'b m t1 t2 (h e) -> b m h t1 t2 e', h=self.num_head)
+            print("inp:", tf.shape(inp))
+            print("k_r:", tf.shape(k_r))
+            print("self.v:", tf.shape(self.v))
+            print("self.u:", tf.shape(self.u))
+            sys.exit()
             score += (
                 # Add them instead of doing separate steps, this is
                 # mathematically equivalent but saves the computation of an
