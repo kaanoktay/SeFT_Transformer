@@ -15,50 +15,7 @@ class PosEncodingBlock(layers.Layer):
             tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
             * -(tf.math.log(10000.0) / enc_dim)
         )
-        self.f = tf.Variable(f, trainable=True)
-        self.equivar = equivar
-
-    def call(self, time):
-        """
-        Input shapes:
-          time: (b, t)
-        Output shapes:
-          return: (b, t, t, d) if equivar
-                  (b, t, 1, d) else
-        """
-        if self.equivar:
-            rel_time = rearrange(time, 'b t -> b t 1') - \
-                rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
-            # Calculate sine and cosine components
-            angles = tf.einsum(
-                'btl,f->btlf', rel_time, self.f)  # (b, t, t, d/2)
-            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, t, d/2)
-            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, t, d/2)
-            # Construct positional encodings
-            pos_enc = rearrange(
-                [sin_enc, cos_enc],  'z b t l k -> b t l (k z)')
-            return pos_enc  # (b, t, t, d)
-        else:
-            # Calculate sine and cosine components
-            angles = tf.einsum(
-                'bt,f->btf', time, self.f)  # (b, t, d/2)
-            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
-            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
-            # Construct positional encodings
-            pos_enc = rearrange(
-                [sin_enc, cos_enc],  'z b t k -> b t 1 (k z)')
-            return pos_enc  # (b, t, 1, d)
-
-class EquivarPosEncodingBlock(layers.Layer):
-    """Positional encodings layer."""
-
-    def __init__(self, enc_dim=128, equivar=False):
-        super(PosEncodingBlock, self).__init__()
-        f = tf.math.exp(
-            tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
-            * -(tf.math.log(10000.0) / enc_dim)
-        )
-        self.f = tf.Variable(f, trainable=True)
+        self.f = tf.Variable(f, trainable=False)
         self.equivar = equivar
 
     def call(self, time):

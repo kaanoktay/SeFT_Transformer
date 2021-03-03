@@ -113,9 +113,11 @@ def main():
         '_timeEnc_' + str(not no_time)
     )
 
+    """
     # File to log variables e.g. learning rate
     file_writer = tf.summary.create_file_writer(experiment_log + "/variables")
     file_writer.set_as_default()
+    """
 
     # Optimizer function
     opt = keras.optimizers.Adam(
@@ -196,7 +198,7 @@ def main():
         validation_steps=val_steps,
         verbose=1,
         callbacks=[#tensorboard_callback,
-                   model_checkpoint_callback,
+                   #model_checkpoint_callback,
                    lr_schedule_callback,
                    lr_warmup_callback,
                    WandbCallback(),
