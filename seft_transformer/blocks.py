@@ -11,10 +11,54 @@ class PosEncodingBlock(layers.Layer):
 
     def __init__(self, enc_dim=128, equivar=False):
         super(PosEncodingBlock, self).__init__()
-        self.f = tf.math.exp(
+        f = tf.math.exp(
             tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
             * -(tf.math.log(10000.0) / enc_dim)
         )
+        self.f = tf.Variable(f, trainable=True)
+        self.equivar = equivar
+
+    def call(self, time):
+        """
+        Input shapes:
+          time: (b, t)
+        Output shapes:
+          return: (b, t, t, d) if equivar
+                  (b, t, 1, d) else
+        """
+        if self.equivar:
+            rel_time = rearrange(time, 'b t -> b t 1') - \
+                rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
+            # Calculate sine and cosine components
+            angles = tf.einsum(
+                'btl,f->btlf', rel_time, self.f)  # (b, t, t, d/2)
+            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, t, d/2)
+            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, t, d/2)
+            # Construct positional encodings
+            pos_enc = rearrange(
+                [sin_enc, cos_enc],  'z b t l k -> b t l (k z)')
+            return pos_enc  # (b, t, t, d)
+        else:
+            # Calculate sine and cosine components
+            angles = tf.einsum(
+                'bt,f->btf', time, self.f)  # (b, t, d/2)
+            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
+            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
+            # Construct positional encodings
+            pos_enc = rearrange(
+                [sin_enc, cos_enc],  'z b t k -> b t 1 (k z)')
+            return pos_enc  # (b, t, 1, d)
+
+class EquivarPosEncodingBlock(layers.Layer):
+    """Positional encodings layer."""
+
+    def __init__(self, enc_dim=128, equivar=False):
+        super(PosEncodingBlock, self).__init__()
+        f = tf.math.exp(
+            tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
+            * -(tf.math.log(10000.0) / enc_dim)
+        )
+        self.f = tf.Variable(f, trainable=True)
         self.equivar = equivar
 
     def call(self, time):
@@ -192,7 +236,7 @@ class SeqAttentionBlock(layers.Layer):
             trainable=True
         )
         if self.equivar:
-            """Previous approach
+            ## Scalable approach
             # Dense layers: time encodings
             self.time_dense = layers.Dense(self.proj_dim)
             # Weight matrix and bias: query/key for time
@@ -207,7 +251,7 @@ class SeqAttentionBlock(layers.Layer):
                 trainable=True
             )
             """
-            # Transformer XL approach
+            ## Transformer XL approach
             self.W_k_r = tf.Variable(
                 initial_value=w_init(
                     shape=(1, num_mod, 1, 1, self.proj_dim, input_dim),
@@ -229,6 +273,7 @@ class SeqAttentionBlock(layers.Layer):
                 ),
                 trainable=True
             )
+            """
 
     def call(self, inp, pos, mask):
         """
@@ -255,7 +300,6 @@ class SeqAttentionBlock(layers.Layer):
         score = score / (self.embed_dim**0.5)  # (b, m, h, t, t)
 
         if self.equivar:
-            """Previous approach
             # Project query/key for time
             q_t = tf.linalg.matvec(self.Wt, inp) + self.Bt
             q_t = rearrange(q_t, 'b t m (h e) -> b m h t e',
@@ -264,7 +308,7 @@ class SeqAttentionBlock(layers.Layer):
             t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
                           h=self.num_head)  # (b, 1, h, t, t, e)
             score = score + tf.linalg.matvec(t, q_t)/(self.embed_dim**0.5)
-            """
+            """Transformers XL approach
             k_r = tf.linalg.matvec(self.W_k_r, pos[:, None, ...])
             k_r = rearrange(
                 k_r, 'b m t1 t2 (h e) -> b m h t1 t2 e', h=self.num_head)
@@ -276,6 +320,7 @@ class SeqAttentionBlock(layers.Layer):
                 # Broadcast to all t2 values
                 + tf.linalg.matvec(k, self.u)[..., None]
             ) / (self.embed_dim**0.5)
+            """
         # Apply mask and causal mask if needed
         causal_mask = None
         if self.causal_mask:
