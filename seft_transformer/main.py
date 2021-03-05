@@ -97,7 +97,7 @@ def main():
             enc_dim=proj_dim, pos_ff_dim=proj_dim,
             pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
             norm_type=norm_type, equivar=equivariance,
-            no_time=no_time
+            no_time=no_time, num_layers=num_layers
         )
     else:
         model = TimeSeriesTransformer(
@@ -121,14 +121,13 @@ def main():
         '_normType_' + norm_type +
         '_uniMod_' + str(uni_mod) +
         '_timeEnc_' + str(not no_time) +
-        '_noMod_' + str(no_mod)
+        '_noMod_' + str(no_mod) +
+        '_numLayer_' + str(num_layers)
     )
 
-    """
     # File to log variables e.g. learning rate
     file_writer = tf.summary.create_file_writer(experiment_log + "/variables")
     file_writer.set_as_default()
-    """
 
     # Optimizer function
     opt = keras.optimizers.Adam(
@@ -156,6 +155,8 @@ def main():
                  keras.metrics.AUC(curve='PR', name='auprc'),
                  keras.metrics.AUC(curve='ROC', name='auroc')]
     )
+
+    model.run_eagerly = True
 
     # Callback for logging the learning rate for inspection
     lr_logger_callback = LearningRateLogger()

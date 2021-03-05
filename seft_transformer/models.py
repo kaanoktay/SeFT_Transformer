@@ -143,17 +143,21 @@ class TimeSeriesTransformer_v2(keras.Model):
 
     def __init__(self, proj_dim=128, num_head=4, enc_dim=128, 
                  pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.2, 
-                 norm_type='reZero', equivar=False, no_time=False):
+                 norm_type='reZero', equivar=False, no_time=False,
+                 num_layers=1):
         super(TimeSeriesTransformer_v2, self).__init__()
 
         self.input_embedding = InputEmbedding_v2(
                 enc_dim=enc_dim, equivar=equivar, no_time=no_time
             )
-        self.transformer_encoder = AxialAttentionEncoderLayer_v2(
-            proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
-            ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type,
-            equivar=equivar
-        )
+        self.enc_layers = []
+        for l in range(num_layers):
+            self.enc_layers.append(
+                AxialAttentionEncoderLayer_v2(
+                proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
+                ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type,
+                equivar=equivar)
+            )
         self.class_prediction = ClassPredictionLayer_v2(
             ff_dim=pred_ff_dim, drop_rate=drop_rate
         )
@@ -179,8 +183,10 @@ class TimeSeriesTransformer_v2(keras.Model):
         inp_enc, pos_enc = self.input_embedding(
             inp, time)  # (b, t, d), (b, t, t, d) or None
         # Calculate attention
-        attn = self.transformer_encoder(
-            inp_enc, pos_enc, mask)
+        attn = inp_enc
+        for layer in self.enc_layers:
+            attn = layer(
+                attn, pos_enc, mask)
         # Prediction
         pred = self.class_prediction(attn, mask)
         return pred  # (b, 1)
