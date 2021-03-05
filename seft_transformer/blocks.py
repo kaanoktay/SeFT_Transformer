@@ -50,6 +50,50 @@ class PosEncodingBlock(layers.Layer):
             return pos_enc  # (b, t, 1, d)
 
 
+class PosEncodingBlock_v2(layers.Layer):
+    """Positional encodings layer."""
+
+    def __init__(self, enc_dim=128, equivar=False):
+        super(PosEncodingBlock_v2, self).__init__()
+        f = tf.math.exp(
+            tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
+            * -(tf.math.log(10000.0) / enc_dim)
+        )
+        self.f = tf.Variable(f, trainable=False)
+        self.equivar = equivar
+
+    def call(self, time):
+        """
+        Input shapes:
+          time: (b, t)
+        Output shapes:
+          return: (b, t, t, d) if equivar
+                  (b, t, 1, d) else
+        """
+        if self.equivar:
+            rel_time = rearrange(time, 'b t -> b t 1') - \
+                rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
+            # Calculate sine and cosine components
+            angles = tf.einsum(
+                'btl,f->btlf', rel_time, self.f)  # (b, t, t, d/2)
+            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, t, d/2)
+            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, t, d/2)
+            # Construct positional encodings
+            pos_enc = rearrange(
+                [sin_enc, cos_enc],  'z b t l k -> b t l (k z)')
+            return pos_enc  # (b, t, t, d)
+        else:
+            # Calculate sine and cosine components
+            angles = tf.einsum(
+                'bt,f->btf', time, self.f)  # (b, t, d/2)
+            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
+            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
+            # Construct positional encodings
+            pos_enc = rearrange(
+                [sin_enc, cos_enc],  'z b t k -> b t (k z)')
+            return pos_enc  # (b, t, d)
+
+
 class InpEncodingBlock(layers.Layer):
     """Input encodings layer."""
 
@@ -105,6 +149,26 @@ class UniInpEncodingBlock(layers.Layer):
         """
         # Calculate input data encodings
         inp_enc = self.dense(inp)  # (b, t, m, d)
+        return inp_enc
+
+
+class InpEncodingBlock_v2(layers.Layer):
+    """Input encodings layer with the same 
+    projection for all modalities."""
+
+    def __init__(self, enc_dim=128):
+        super(InpEncodingBlock_v2, self).__init__()
+        self.dense = layers.Dense(enc_dim)
+
+    def call(self, inp):
+        """
+        Input shapes:
+          inp: (b, t, m)
+        Output shapes:
+          return: (b, t, d)
+        """
+        # Calculate input data encodings
+        inp_enc = self.dense(inp)  # (b, t, d)
         return inp_enc
 
 
@@ -309,6 +373,84 @@ class SeqAttentionBlock(layers.Layer):
         return concat_out
 
 
+class SeqAttentionBlock_v2(layers.Layer):
+    """Sequential attention layer with the
+    same projection for all modalities."""
+
+    def __init__(self, proj_dim=128, num_head=4, 
+                 drop_rate=0.2, equivar=False):
+        super().__init__()
+        self.proj_dim = proj_dim
+        self.num_head = num_head
+        self.embed_dim = proj_dim // num_head
+        self.dropout = layers.Dropout(drop_rate)
+        self.equivar = equivar
+
+        self.query_dense = layers.Dense(proj_dim)
+        self.key_dense = layers.Dense(proj_dim)
+        self.value_dense = layers.Dense(proj_dim)
+        if equivar:
+            # Dense layers: time encodings
+            self.time_dense = layers.Dense(proj_dim)
+            self.time_query_dense = layers.Dense(proj_dim)
+        
+    def call(self, inp, pos, mask):
+        """
+        Input shapes:
+          inp:  (b, t, d)
+          pos:  (b, t, t, d) if equivar
+                None         else
+          mask: (b, t)
+        Output shapes:
+          return: (b, t, p)
+        """
+        # Project query, key and value
+        q = self.query_dense(inp)  # (b, t, p)
+        k = self.key_dense(inp)   # (b, t, p)
+        v = self.value_dense(inp)  # (b, t, p)
+        # Separate heads
+        q = rearrange(q, 'b t (h e) -> b h t e',
+                      h=self.num_head)  # (b, h, t, e)
+        k = rearrange(k, 'b t (h e) -> b h t e',
+                      h=self.num_head)  # (b, h, t, e)
+        v = rearrange(v, 'b t (h e) -> b h t e',
+                      h=self.num_head)  # (b, h, t, e)
+        # Calculate attention scores
+        score = tf.einsum('...ij,...kj->...ik', q, k)
+        score = score / (self.embed_dim**0.5)  # (b, h, t, t)
+        if self.equivar:
+            # Project query/key for time
+            q_t = self.time_query_dense(inp)
+            q_t = rearrange(q_t, 'b t (h e) -> b h t e',
+                            h=self.num_head)  # (b, h, t, e)
+            t = self.time_dense(pos)
+            t = rearrange(t, 'b t l (h e) -> b h t l e',
+                          h=self.num_head)  # (b, h, t, t, e)
+            score = score + \
+                tf.linalg.matvec(t, q_t)/(self.embed_dim**0.5)  # (b, h, t, t)
+        # Apply mask if needed
+        if mask is not None:
+            mask = rearrange(mask, 'b t -> b 1 1 t')
+            score = tf.where(mask, score, -np.inf)
+        # Calculate attention weights
+        weight = tf.nn.softmax(score)  # (b, h, t, t)
+        if mask is not None:
+            weight = tf.where(mask, weight, 0)
+        # Check if there is any NaN in weights
+        tf.debugging.check_numerics(
+            tensor=weight,
+            message="Check the values after softmax"
+        )
+        # Apply dropout
+        weight = self.dropout(weight)
+        # Calculate attention output
+        out = tf.einsum('...ij,...jk->...ik', weight, v)  # (b, h, t, e)
+        # Concatenate heads
+        concat_out = rearrange(
+            out, 'b h t e -> b t (h e)')  # (b, t, p)
+        return concat_out
+
+
 class UniSeqAttentionBlock(layers.Layer):
     """Sequential attention layer with the
     same projection for all modalities."""
@@ -467,7 +609,6 @@ class UniAxialMultiHeadAttentionBlock(layers.Layer):
         self.modAttention = ModAttentionBlock(
             proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate
         )
-        self.enc_dim = enc_dim
         self.projection_dense = layers.Dense(enc_dim)
 
     def call(self, inp, pos, mask):
@@ -475,7 +616,6 @@ class UniAxialMultiHeadAttentionBlock(layers.Layer):
         Input shapes:
           inp:  (b, t, m, d)
           pos:  (b, t, t, d)
-          mod:  (b, 1, m, d)
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, d)
@@ -486,6 +626,36 @@ class UniAxialMultiHeadAttentionBlock(layers.Layer):
         out = self.modAttention(out, mask)  # (b, t, m, p)
         # Linear projection to encoding dimension
         out = self.projection_dense(out) # (b, t, m, d)
+        return out
+
+
+class AxialMultiHeadAttentionBlock_v2(layers.Layer):
+    """Multi head attention later with the
+    same projection for all modalities."""
+
+    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
+                 drop_rate=0.2, equivar=False):
+        super().__init__()
+        self.seqAttention = SeqAttentionBlock_v2(
+            proj_dim=proj_dim, num_head=num_head, 
+            drop_rate=drop_rate, equivar=equivar
+        )
+        self.projection_dense = layers.Dense(enc_dim)
+
+    def call(self, inp, pos, mask):
+        """
+        Input shapes:
+          inp:  (b, t, d)
+          pos:  (b, t, t, d) if equivar
+                None         else
+          mask: (b, t, m)
+        Output shapes:
+          return: (b, t, d)
+        """
+        # Attention over timestamps
+        out = self.seqAttention(inp, pos, mask)  # (b, t, p)
+        # Linear projection to encoding dimension
+        out = self.projection_dense(out) # (b, t, d)
         return out
 
 
@@ -548,8 +718,6 @@ class UniPosFeedforwardBlock(layers.Layer):
 
     def __init__(self, enc_dim=128, ff_dim=128, drop_rate=0.2):
         super().__init__()
-        self.enc_dim = enc_dim
-        self.ff_dim = ff_dim
         self.dropout = layers.Dropout(drop_rate)
         self.dense1 = layers.Dense(ff_dim, activation='relu')
         self.dense2 = layers.Dense(enc_dim)
@@ -565,6 +733,30 @@ class UniPosFeedforwardBlock(layers.Layer):
         out = self.dense1(inp) # (b, t, m, f)
         out = self.dropout(out)
         out = self.dense2(out) # (b, t, m, d)
+        return out
+
+
+class PosFeedforwardBlock_v2(layers.Layer):
+    """Positional feedforward network layer
+    with same dense layer for all modalities."""
+
+    def __init__(self, enc_dim=128, ff_dim=128, drop_rate=0.2):
+        super().__init__()
+        self.dropout = layers.Dropout(drop_rate)
+        self.dense1 = layers.Dense(ff_dim, activation='relu')
+        self.dense2 = layers.Dense(enc_dim)
+
+    def call(self, inp):
+        """
+        Input shapes:
+          inp:  (b, t, d)
+        Output shapes:
+          return: (b, t, d)
+        """
+        # Positionwise feedforward network
+        out = self.dense1(inp) # (b, t, f)
+        out = self.dropout(out)
+        out = self.dense2(out) # (b, t, d)
         return out
 
 
@@ -611,7 +803,7 @@ class PosFeedforwardBlock(layers.Layer):
     def call(self, inp):
         """
         Input shapes:
-          inp:  (b, t, m, p)
+          inp:  (b, t, m, d)
         Output shapes:
           return: (b, t, m, d)
         """

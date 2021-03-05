@@ -7,7 +7,7 @@ import pdb
 from tensorflow import keras
 
 from .training_utils import Preprocessing
-from .models import TimeSeriesTransformer
+from .models import TimeSeriesTransformer, TimeSeriesTransformer_v2
 from .callbacks import WarmUpScheduler, LearningRateLogger
 
 import wandb
@@ -33,8 +33,8 @@ def parse_arguments():
                         metavar="200", help='number of epochs')
     parser.add_argument('--init_lr', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_decay_rate', type=float, default=0.25,
-                        metavar="0.25", help='decay rate of learning rate')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.5,
+                        metavar="0.5", help='decay rate of learning rate')
     parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
                         metavar="2e3", help='learning rate warmup steps')
     parser.add_argument('--dropout_rate', type=float, default=0.1,
@@ -49,14 +49,14 @@ def parse_arguments():
                         metavar='32', help='projection dimension')
     parser.add_argument('--num_heads', type=int, default='2',
                         metavar='2', help='number of heads')
-    parser.add_argument('--equivariance', dest='equivariance', 
+    parser.add_argument('--equivariance', default=False, 
                         action='store_true')
-    parser.add_argument('--no_time', dest='no_time', 
+    parser.add_argument('--no_time', default=False,
                         action='store_true')
-    parser.add_argument('--uni_mod', dest='uni_mod',
+    parser.add_argument('--uni_mod', default=False,
                         action='store_true')
-    parser.set_defaults(equivariance=False, no_time=False, uni_mod=False)
-
+    parser.add_argument('--no_mod', default=False,
+                        action='store_true')
     return parser.parse_args()
 
 def main():
@@ -70,7 +70,7 @@ def main():
     batch_size = args.batch_size  # Default: 16
     num_epochs = args.num_epochs  # Default: 200
     init_lr = args.init_lr  # Default: 1e-4
-    lr_decay_rate = args.lr_decay_rate  # Default: 0.25
+    lr_decay_rate = args.lr_decay_rate  # Default: 0.5
     lr_warmup_steps = args.lr_warmup_steps  # Default: 2e3
     dropout_rate = args.dropout_rate  # Default: 0.1
     norm_type = args.norm_type  # Default: 'reZero'
@@ -81,6 +81,7 @@ def main():
     equivariance = args.equivariance  # Default: False
     no_time = args.no_time  # Default: False
     uni_mod = args.uni_mod  # Default: False
+    no_mod = args.no_mod  # Default: False
 
     # Load data
     transformation = Preprocessing(
@@ -90,14 +91,23 @@ def main():
         transformation._prepare_dataset_for_training()
     
     # Initialize the model
-    model = TimeSeriesTransformer(
-        proj_dim=proj_dim, num_head=num_heads,
-        enc_dim=proj_dim, pos_ff_dim=proj_dim,
-        pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
-        norm_type=norm_type, dataset=dataset,
-        equivar=equivariance, num_layers=num_layers,
-        no_time=no_time, uni_mod=uni_mod
-    )
+    if no_mod:
+        model = TimeSeriesTransformer_v2(
+            proj_dim=proj_dim, num_head=num_heads,
+            enc_dim=proj_dim, pos_ff_dim=proj_dim,
+            pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
+            norm_type=norm_type, equivar=equivariance,
+            no_time=no_time
+        )
+    else:
+        model = TimeSeriesTransformer(
+            proj_dim=proj_dim, num_head=num_heads,
+            enc_dim=proj_dim, pos_ff_dim=proj_dim,
+            pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
+            norm_type=norm_type, dataset=dataset,
+            equivar=equivariance, num_layers=num_layers,
+            no_time=no_time, uni_mod=uni_mod
+        )
 
     # Experiment logs folder
     experiment_log = os.path.join(
@@ -110,7 +120,8 @@ def main():
         '_dropRate_' + str(dropout_rate) +
         '_normType_' + norm_type +
         '_uniMod_' + str(uni_mod) +
-        '_timeEnc_' + str(not no_time)
+        '_timeEnc_' + str(not no_time) +
+        '_noMod_' + str(no_mod)
     )
 
     """
@@ -160,7 +171,7 @@ def main():
         monitor='val_loss',
         mode='min',
         factor=lr_decay_rate,
-        patience=7,
+        patience=5,
         min_lr=1e-8
     )
 
@@ -168,7 +179,7 @@ def main():
     early_stopping_callback = keras.callbacks.EarlyStopping(
         monitor='val_loss',
         mode='min',
-        patience=20,
+        patience=10,
         restore_best_weights=True
     )
 
@@ -199,9 +210,10 @@ def main():
         verbose=1,
         callbacks=[#tensorboard_callback,
                    #model_checkpoint_callback,
+                   early_stopping_callback,
+                   WandbCallback(),
                    lr_schedule_callback,
                    lr_warmup_callback,
-                   WandbCallback(),
                    lr_logger_callback]
     )
 
