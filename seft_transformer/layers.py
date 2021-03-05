@@ -163,24 +163,25 @@ class ClassPredictionLayer(layers.Layer):
         if mask is not None:
             mask = rearrange(mask, 'b t m -> b t m 1')
             inp = tf.where(mask, inp, 0)
+        out = self.densePred1(self.dropout(inp)) # (b, t, m, f)
         # Calculate sum over the modalities
         if self.causal_mask:
-            out = reduce(inp, 'b t m d -> b t d', 'sum')
+            out = reduce(out, 'b t m f -> b t f', 'sum')
         # Calculate sum over the timesteps and modalities
         else:
-            out = reduce(inp, 'b t m d -> b d', 'sum')
+            out = reduce(inp, 'b t m f -> b f', 'sum')
         # Calculate number of measured samples and normalize the sum
         mask = tf.cast(mask, dtype='float32')
         if self.causal_mask:
             norm = reduce(mask, 'b t m 1-> b t 1', 'sum')
-            out = out / norm  # (b, t, d)
+            out = out / norm  # (b, t, f)
             out = tf.where(tf.math.is_nan(out), 0.0, out)
         else:
             norm = reduce(mask, 'b t m 1-> b 1', 'sum')
-            out = out / norm  # (b, d)
+            out = out / norm  # (b, f)
         # Predict the class
         # Project to an intermediate dimension
-        pred = self.densePred2(self.densePred1(self.dropout(out)))
+        pred = self.densePred2(out) # (b, 1)
         return pred  # if causal_mask (b, t, 1) else (b, 1)
 
 
