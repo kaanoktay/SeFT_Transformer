@@ -169,7 +169,7 @@ class ClassPredictionLayer(layers.Layer):
             out = reduce(out, 'b t m f -> b t f', 'sum')
         # Calculate sum over the timesteps and modalities
         else:
-            out = reduce(inp, 'b t m f -> b f', 'sum')
+            out = reduce(out, 'b t m f -> b f', 'sum')
         # Calculate number of measured samples and normalize the sum
         mask = tf.cast(mask, dtype='float32')
         if self.causal_mask:
