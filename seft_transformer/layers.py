@@ -296,12 +296,13 @@ class ClassPredictionLayer_v2(layers.Layer):
         if mask is not None:
             mask = rearrange(mask, 'b t -> b t 1')
             inp = tf.where(mask, inp, 0)
+        out = self.densePred1(self.dropout(inp))
         # Calculate sum over the timesteps
-        out = reduce(inp, 'b t d -> b d', 'sum')
+        out = reduce(out, 'b t d -> b d', 'sum')
         # Calculate number of measured samples and normalize the sum
         mask = tf.cast(mask, dtype='float32')
         norm = reduce(mask, 'b t 1-> b 1', 'sum')
         out = out / norm  # (b, d)
         # Predict the class
-        pred = self.densePred2(self.densePred1(self.dropout(out)))
+        pred = self.densePred2(out)
         return pred  # (b, 1)
