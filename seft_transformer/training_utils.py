@@ -209,9 +209,24 @@ class Preprocessing(object):
     def normalize_and_preprocess(self):
         """Normalize input data and apply model specific preprocessing fn."""
 
+        def flatten_to_set(ts, labels):
+            # Convert normalized ts to flattened set representation
+            demo, X, Y, measurements, lengths = ts
+            X = tf.expand_dims(X, -1)
+            measurement_positions = tf.cast(tf.where(measurements), tf.int32)
+            X_indices = measurement_positions[:, 0]
+            Y_indices = measurement_positions[:, 1]
+
+            gathered_X = tf.gather(X, X_indices)
+            gathered_Y = tf.gather_nd(Y, measurement_positions)
+            gathered_Y = tf.expand_dims(gathered_Y, axis=-1)
+
+            length = tf.shape(X_indices)[0]
+            return (demo, gathered_X, gathered_Y, Y_indices, length), labels
+
         def combined_fn(ts, labels):
             normalized_ts, labels = self.normalizer.get_normalization_fn()(ts, labels)
-            return normalized_ts, labels
+            return flatten_to_set(normalized_ts, labels)
 
         return combined_fn
 
