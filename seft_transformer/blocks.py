@@ -50,50 +50,6 @@ class PosEncodingBlock(layers.Layer):
             return pos_enc  # (b, t, 1, d)
 
 
-class PosEncodingBlock_v2(layers.Layer):
-    """Positional encodings layer."""
-
-    def __init__(self, enc_dim=128, equivar=False):
-        super(PosEncodingBlock_v2, self).__init__()
-        f = tf.math.exp(
-            tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
-            * -(tf.math.log(10000.0) / enc_dim)
-        )
-        self.f = tf.Variable(f, trainable=False)
-        self.equivar = equivar
-
-    def call(self, time):
-        """
-        Input shapes:
-          time: (b, t)
-        Output shapes:
-          return: (b, t, t, d) if equivar
-                  (b, t, 1, d) else
-        """
-        if self.equivar:
-            rel_time = rearrange(time, 'b t -> b t 1') - \
-                rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
-            # Calculate sine and cosine components
-            angles = tf.einsum(
-                'btl,f->btlf', rel_time, self.f)  # (b, t, t, d/2)
-            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, t, d/2)
-            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, t, d/2)
-            # Construct positional encodings
-            pos_enc = rearrange(
-                [sin_enc, cos_enc],  'z b t l k -> b t l (k z)')
-            return pos_enc  # (b, t, t, d)
-        else:
-            # Calculate sine and cosine components
-            angles = tf.einsum(
-                'bt,f->btf', time, self.f)  # (b, t, d/2)
-            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
-            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
-            # Construct positional encodings
-            pos_enc = rearrange(
-                [sin_enc, cos_enc],  'z b t k -> b t (k z)')
-            return pos_enc  # (b, t, d)
-
-
 class InpEncodingBlock(layers.Layer):
     """Input encodings layer."""
 
@@ -129,26 +85,6 @@ class InpEncodingBlock(layers.Layer):
         """
         # Calculate input data encodings
         inp_enc = tf.linalg.matvec(self.W, inp) + self.B  # (b, t, m, d)
-        return inp_enc
-
-
-class UniInpEncodingBlock(layers.Layer):
-    """Input encodings layer with the same 
-    projection for all modalities."""
-
-    def __init__(self, enc_dim=128):
-        super(UniInpEncodingBlock, self).__init__()
-        self.dense = layers.Dense(enc_dim)
-
-    def call(self, inp):
-        """
-        Input shapes:
-          inp: (b, t, m, i)
-        Output shapes:
-          return: (b, t, m, d)
-        """
-        # Calculate input data encodings
-        inp_enc = self.dense(inp)  # (b, t, m, d)
         return inp_enc
 
 

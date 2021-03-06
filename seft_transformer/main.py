@@ -7,18 +7,16 @@ import pdb
 from tensorflow import keras
 
 from .training_utils import Preprocessing
-from .models import TimeSeriesTransformer, TimeSeriesTransformer_v2
+from .models import TimeSeriesTransformer
 from .callbacks import WarmUpScheduler, LearningRateLogger
 
 import wandb
 from wandb.keras import WandbCallback
-wandb.init(project="master_thesis_kaan", entity="borgwardt")
+#wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
 from tensorflow.python.util import deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
-checkpoint_filepath = './checkpoints/cp.ckpt'
-log_dir = "./logs"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.random.set_seed(83)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
@@ -33,8 +31,6 @@ def parse_arguments():
                         metavar="200", help='number of epochs')
     parser.add_argument('--init_lr', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_decay_rate', type=float, default=0.5,
-                        metavar="0.5", help='decay rate of learning rate')
     parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
                         metavar="2e3", help='learning rate warmup steps')
     parser.add_argument('--dropout_rate', type=float, default=0.1,
@@ -53,10 +49,6 @@ def parse_arguments():
                         action='store_true')
     parser.add_argument('--no_time', default=False,
                         action='store_true')
-    parser.add_argument('--uni_mod', default=False,
-                        action='store_true')
-    parser.add_argument('--no_mod', default=False,
-                        action='store_true')
     return parser.parse_args()
 
 def main():
@@ -64,13 +56,12 @@ def main():
     args = parse_arguments()
 
     # Add hyperparameters to wandb config
-    wandb.config.update(args)
+    #wandb.config.update(args)
 
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
     num_epochs = args.num_epochs  # Default: 200
     init_lr = args.init_lr  # Default: 1e-4
-    lr_decay_rate = args.lr_decay_rate  # Default: 0.5
     lr_warmup_steps = args.lr_warmup_steps  # Default: 2e3
     dropout_rate = args.dropout_rate  # Default: 0.1
     norm_type = args.norm_type  # Default: 'reZero'
@@ -80,8 +71,6 @@ def main():
     num_heads = args.num_heads  # Default: 2
     equivariance = args.equivariance  # Default: False
     no_time = args.no_time  # Default: False
-    uni_mod = args.uni_mod  # Default: False
-    no_mod = args.no_mod  # Default: False
 
     # Load data
     transformation = Preprocessing(
@@ -91,43 +80,14 @@ def main():
         transformation._prepare_dataset_for_training()
     
     # Initialize the model
-    if no_mod:
-        model = TimeSeriesTransformer_v2(
-            proj_dim=proj_dim, num_head=num_heads,
-            enc_dim=proj_dim, pos_ff_dim=proj_dim,
-            pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
-            norm_type=norm_type, equivar=equivariance,
-            no_time=no_time, num_layers=num_layers
-        )
-    else:
-        model = TimeSeriesTransformer(
-            proj_dim=proj_dim, num_head=num_heads,
-            enc_dim=proj_dim, pos_ff_dim=proj_dim,
-            pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
-            norm_type=norm_type, dataset=dataset,
-            equivar=equivariance, num_layers=num_layers,
-            no_time=no_time, uni_mod=uni_mod
-        )
-
-    # Experiment logs folder
-    experiment_log = os.path.join(
-        log_dir,
-        dataset,
-        'ex_batchSize_' + str(batch_size) +
-        '_projDim_' + str(proj_dim) +
-        '_transEq_' + str(equivariance) +
-        '_numHead_' + str(num_heads) +
-        '_dropRate_' + str(dropout_rate) +
-        '_normType_' + norm_type +
-        '_uniMod_' + str(uni_mod) +
-        '_timeEnc_' + str(not no_time) +
-        '_noMod_' + str(no_mod) +
-        '_numLayer_' + str(num_layers)
+    model = TimeSeriesTransformer(
+        proj_dim=proj_dim, num_head=num_heads,
+        enc_dim=proj_dim, pos_ff_dim=proj_dim,
+        pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
+        norm_type=norm_type, dataset=dataset,
+        equivar=equivariance, num_layers=num_layers,
+        no_time=no_time
     )
-
-    # File to log variables e.g. learning rate
-    file_writer = tf.summary.create_file_writer(experiment_log + "/variables")
-    file_writer.set_as_default()
 
     # Optimizer function
     opt = keras.optimizers.Adam(
@@ -169,7 +129,7 @@ def main():
     lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
         monitor='val_loss',
         mode='min',
-        factor=lr_decay_rate,
+        factor=0.5,
         patience=5,
         min_lr=1e-8
     )
@@ -178,24 +138,8 @@ def main():
     early_stopping_callback = keras.callbacks.EarlyStopping(
         monitor='val_loss',
         mode='min',
-        patience=12,
+        patience=10,
         restore_best_weights=True
-    )
-
-    # Callback for saving the weights of the best model
-    model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_filepath,
-        save_weights_only=True,
-        monitor='val_loss',
-        mode='min',
-        save_best_only=True
-    )
-
-    # Callback for Tensorboard logging
-    tensorboard_callback = keras.callbacks.TensorBoard(
-        log_dir=experiment_log,
-        update_freq='epoch',
-        profile_batch='100,110'
     )
 
     # Fit the model to the input data
@@ -207,16 +151,14 @@ def main():
         validation_data=val_iter,
         validation_steps=val_steps,
         verbose=1,
-        callbacks=[tensorboard_callback,
-                   #model_checkpoint_callback,
-                   early_stopping_callback,
-                   WandbCallback(),
-                   lr_schedule_callback,
+        callbacks=[lr_schedule_callback,
                    lr_warmup_callback,
-                   lr_logger_callback]
+                   lr_logger_callback,
+                   #WandbCallback(),
+                   early_stopping_callback]
     )
 
-    model.save(os.path.join(wandb.run.dir, "model.h5"))
+    #model.save(os.path.join(wandb.run.dir, "model.h5"))
 
     print("\n------- Test -------")
     # Fit the model to the input data
