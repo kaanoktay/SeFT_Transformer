@@ -4,3 +4,4 @@ poetry.lock
 logs/
 .DS_Store
 wandb/
+.vscode/
