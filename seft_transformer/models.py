@@ -115,6 +115,11 @@ class TimeSeriesTransformer(keras.Model):
         inp = inputs[2]  # (b, t, m)
         mask = inputs[3]  # (b, t, m)
         count = inputs[4]  # (b, 1)
+        print('time:', tf.shape(time))
+        print('inp:', tf.shape(inp))
+        print('mask:', tf.shape(mask))
+        print('count:', tf.shape(count))
+        sys.exit()
         # Expand input dimensions if necessary
         if len(inp.shape) == 3:
             inp = rearrange(inp, 'b t m -> b t m 1')

@@ -116,6 +116,8 @@ def main():
                  keras.metrics.AUC(curve='ROC', name='auroc')]
     )
 
+    model.run_eagerly = True
+
     # Callback for logging the learning rate for inspection
     lr_logger_callback = LearningRateLogger()
 
