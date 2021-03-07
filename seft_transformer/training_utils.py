@@ -13,6 +13,18 @@ get_output_types = tf.compat.v1.data.get_output_types
 make_one_shot_iterator = tf.compat.v1.data.make_one_shot_iterator
 
 
+class PaddedToSegments(tf.keras.layers.Layer):
+    """Convert a padded tensor with mask to a stacked tensor with segments."""
+
+    def compute_output_shape(self, input_shape):
+        return (None, input_shape[-1])
+
+    def call(self, inputs, mask):
+        valid_observations = tf.where(mask)
+        collected_values = tf.gather_nd(inputs, valid_observations)
+        return collected_values, valid_observations[:, 0]
+
+
 def positive_instances(*args):
     if len(args) == 2:
         data, label = args

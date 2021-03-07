@@ -30,14 +30,14 @@ class InputEmbedding(layers.Layer):
         self.equivar = equivar
         self.no_time = no_time
 
-    def call(self, inp, time, mask):
+    def call(self, inp, time, mod):
         """
         Input shapes:
-          inp:  (b, t, m, i)
-          time: (b, t)
-          mask: (b, t, m)
+          inp:  (n)
+          time: (n)
+          mod: (n)
         Output shapes:
-          return: (b, t, m, d), (b, t, t, d) if equivar
+          return: (n, t, m, d), (b, t, t, d) if equivar
                   (b, t, m, d), None         else
         """
         pos_enc = self.pos_encoding(time)
@@ -47,7 +47,7 @@ class InputEmbedding(layers.Layer):
             return inp_enc + mod_enc, None
         else:
             if self.equivar:
-                return inp_enc + mod_enc, pos_enc
+                return inp_enc + mod_enc
             else:
                 return inp_enc + mod_enc + pos_enc, None
 

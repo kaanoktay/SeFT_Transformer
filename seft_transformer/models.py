@@ -4,6 +4,8 @@ import tensorflow as tf
 from einops import rearrange
 import sys
 
+from .training_utils import PaddedToSegments
+
 from .layers import (
     AxialAttentionEncoderLayer,
     ClassPredictionLayer,
@@ -35,6 +37,7 @@ class TimeSeriesTransformer(keras.Model):
             ff_dim=pred_ff_dim, drop_rate=drop_rate,
             causal_mask=self.causal_mask
         )
+        self.to_segments = PaddedToSegments()
     
     def train_step(self, data):
         x, y = data
@@ -111,26 +114,45 @@ class TimeSeriesTransformer(keras.Model):
           return: prediction
         """
         # Get inputs
-        time = inputs[1]  # (b, t)
-        inp = inputs[2]  # (b, t, m)
-        mask = inputs[3]  # (b, t, m)
-        count = inputs[4]  # (b, 1)
-        print('time:', tf.shape(time))
-        print('inp:', tf.shape(inp))
-        print('mask:', tf.shape(mask))
-        print('count:', tf.shape(count))
-        sys.exit()
-        # Expand input dimensions if necessary
-        if len(inp.shape) == 3:
-            inp = rearrange(inp, 'b t m -> b t m 1')
+        time = tf.squeeze(inputs[1])  # (b, t)
+        inp = tf.squeeze(inputs[2])   # (b, t)
+        mod = inputs[3]  # (b, t)
+        count = inputs[4]  # (b)
+        mask = tf.sequence_mask(count)  # (b, t)
+
+        # Get input, time and modality sets
+        time_set, segment_ids = self.to_segments(time, mask)
+        inp_set, _ = self.to_segments(inp, mask)
+        mod_set, _ = self.to_segments(mod, mask)
+        
+        # Get variables for segment ids
+        # Batch
+        batch_segment_ids, _ = tf.unique(segment_ids)
+        n_batch_segments = batch_segment_ids.shape[0]
+        # Time
+        time_segment_ids, _ = tf.unique(time_set)
+        n_time_segments = time_segment_ids.shape[0]
+        # Modality
+        mod_segment_ids, _ = tf.unique(mod_set)
+        n_mod_segments = mod_segment_ids.shape[0]
+
+        # Add an extra dimension for embedding
+        inp_set = rearrange(inp_set, 'n -> n 1')
+        time_set = rearrange(time_set, 'n -> n 1')
+        mod_set = rearrange(mod_set, 'n -> n 1')
+
         # Encode inputs
         inp_enc, pos_enc = self.input_embedding(
-            inp, time, mask)
+            inp_set, time_set, mod_set)
+        print(inp_enc)
+        sys.exit()    
         # Calculate attention
         attn = self.transformer_encoder(
             inp_enc, pos_enc, mask)
+
         # Make prediction: if causal_mask (b, t, 1) else (b, 1)
         pred = self.class_prediction(attn, mask)
+
         if self.causal_mask:
             return pred, count
         else:
