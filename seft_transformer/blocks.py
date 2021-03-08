@@ -10,7 +10,7 @@ class PosEncodingBlock(layers.Layer):
     """Positional encodings layer."""
 
     def __init__(self, enc_dim=128, equivar=False):
-        super(PosEncodingBlock, self).__init__()
+        super().__init__()
         f = tf.math.exp(
             tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
             * -(tf.math.log(10000.0) / enc_dim)
@@ -21,10 +21,10 @@ class PosEncodingBlock(layers.Layer):
     def call(self, time):
         """
         Input shapes:
-          time: (b, t)
+          time: (n, 1)
         Output shapes:
-          return: (b, t, t, d) if equivar
-                  (b, t, 1, d) else
+          return: (n, n, d) if equivar
+                  (n, d) else
         """
         if self.equivar:
             rel_time = rearrange(time, 'b t -> b t 1') - \
@@ -41,50 +41,32 @@ class PosEncodingBlock(layers.Layer):
         else:
             # Calculate sine and cosine components
             angles = tf.einsum(
-                'bt,f->btf', time, self.f)  # (b, t, d/2)
-            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
-            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
+                'n,f->nf', tf.squeeze(time), self.f)  # (n, d/2)
+            sin_enc = tf.math.sin(angles)  # sin encodings (n, d/2)
+            cos_enc = tf.math.cos(angles)  # cos encodings (n, d/2)
             # Construct positional encodings
             pos_enc = rearrange(
-                [sin_enc, cos_enc],  'z b t k -> b t 1 (k z)')
-            return pos_enc  # (b, t, 1, d)
+                [sin_enc, cos_enc],  'z n k -> n (k z)')  # (n, d)
+            return pos_enc  # (n, d)
 
 
 class InpEncodingBlock(layers.Layer):
     """Input encodings layer."""
 
     def __init__(self, enc_dim=128):
-        super(InpEncodingBlock, self).__init__()
+        super().__init__()
         self.enc_dim = enc_dim
-
-    def build(self, input_shape):
-        # Input shapes
-        input_dim = input_shape[-1]
-        num_mod = input_shape[-2]
-        # Weight and bias initializers
-        w_init = tf.random_normal_initializer()
-        b_init = tf.zeros_initializer()
-        # Weight matrix and bias: input data encoding
-        self.W = tf.Variable(
-            initial_value=w_init(
-                shape=(num_mod, self.enc_dim, input_dim), dtype="float32"),
-            trainable=True
-        )
-        self.B = tf.Variable(
-            initial_value=b_init(
-                shape=(num_mod, self.enc_dim), dtype="float32"),
-            trainable=True
-        )
+        self.dense = layers.Dense(enc_dim)
 
     def call(self, inp):
         """
         Input shapes:
-          inp: (b, t, m, i)
+          inp: (n, 1)
         Output shapes:
-          return: (b, t, m, d)
+          return: (n, d)
         """
         # Calculate input data encodings
-        inp_enc = tf.linalg.matvec(self.W, inp) + self.B  # (b, t, m, d)
+        inp_enc = self.dense(inp)
         return inp_enc
 
 
@@ -92,31 +74,24 @@ class ModEncodingBlock(layers.Layer):
     """Modality encodings layer."""
 
     def __init__(self, enc_dim=128):
-        super(ModEncodingBlock, self).__init__()
+        super().__init__()
         self.enc_dim = enc_dim
-
-    def build(self, input_shape):
-        # Input shapes
-        num_mod = input_shape[-2]
         # Embedding layer
         self.embedding_layer = layers.Embedding(
-            num_mod,
-            self.enc_dim,
-            input_length=num_mod
+            37,
+            self.enc_dim
         )
-        # Modality --> integers
-        self.mods = rearrange(tf.range(num_mod), 'm -> 1 1 m')
 
-    def call(self, inp):
+    def call(self, mod):
         """
         Input shapes:
-          inp: (b, t, m, i)
+          mod: (n, 1)
         Output shapes:
-          return: (1, 1, m, d)
+          return: (n, 1, d)
         """
         # Calculate modality data encodings
-        mod_enc = self.embedding_layer(self.mods)  # (1, 1, m, d)
-        return mod_enc
+        mod_enc = self.embedding_layer(mod)  # (n, 1, d)
+        return tf.squeeze(mod_enc) # (n, d)
 
 
 class SeqAttentionBlock(layers.Layer):

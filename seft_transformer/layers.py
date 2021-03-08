@@ -16,10 +16,10 @@ from .blocks import (
 class InputEmbedding(layers.Layer):
     def __init__(self, enc_dim=128, equivar=False, 
                  no_time=False):
-        super(InputEmbedding, self).__init__()
+        super().__init__()
 
         self.pos_encoding = PosEncodingBlock(
-            enc_dim=enc_dim, equivar=equivar
+            enc_dim=enc_dim
         )
         self.inp_encoding = InpEncodingBlock(
             enc_dim=enc_dim
@@ -33,28 +33,24 @@ class InputEmbedding(layers.Layer):
     def call(self, inp, time, mod):
         """
         Input shapes:
-          inp:  (n)
-          time: (n)
-          mod: (n)
+          inp:  (n, 1)
+          time: (n, 1)
+          mod:  (n, 1)
         Output shapes:
-          return: (n, t, m, d), (b, t, t, d) if equivar
-                  (b, t, m, d), None         else
+          return: (n, d)
         """
-        pos_enc = self.pos_encoding(time)
-        inp_enc = self.inp_encoding(inp)
-        mod_enc = self.mod_encoding(inp)
-        if self.no_time:
-            return inp_enc + mod_enc, None
+        inp_enc = self.inp_encoding(inp)  # (n, d)
+        mod_enc = self.mod_encoding(mod)  # (n, d)
+        if self.no_time or self.equivar:
+            return inp_enc + mod_enc  # (n, d)
         else:
-            if self.equivar:
-                return inp_enc + mod_enc
-            else:
-                return inp_enc + mod_enc + pos_enc, None
+            pos_enc = self.pos_encoding(time)  # (n, d)
+            return inp_enc + mod_enc + pos_enc  # (n, d)
 
 
 class ReZero(layers.Layer):
     def __init__(self):
-        super(ReZero, self).__init__()
+        super().__init__()
 
         self.re_weight = tf.Variable(
             initial_value=0.0,

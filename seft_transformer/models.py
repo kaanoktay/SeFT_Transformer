@@ -37,6 +37,7 @@ class TimeSeriesTransformer(keras.Model):
             ff_dim=pred_ff_dim, drop_rate=drop_rate,
             causal_mask=self.causal_mask
         )
+        self.equivar = equivar
         self.to_segments = PaddedToSegments()
     
     def train_step(self, data):
@@ -141,16 +142,15 @@ class TimeSeriesTransformer(keras.Model):
         time_set = rearrange(time_set, 'n -> n 1')
         mod_set = rearrange(mod_set, 'n -> n 1')
 
-        # Encode inputs
-        inp_enc, pos_enc = self.input_embedding(
+        # If no_time --> no time information used for inp_enc
+        # If equivar --> time_enc will be calculated on fly
+        # If none    --> time_enc in inp_enc
+        inp_enc = self.input_embedding(
             inp_set, time_set, mod_set)
-        print(inp_enc)
-        sys.exit()    
         # Calculate attention
         attn = self.transformer_encoder(
-            inp_enc, pos_enc, mask)
-
-        # Make prediction: if causal_mask (b, t, 1) else (b, 1)
+            inp_enc, pos_enc)
+        # Make prediction: if causal_mask (b, t, 1) else (n, 1)
         pred = self.class_prediction(attn, mask)
 
         if self.causal_mask:
