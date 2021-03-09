@@ -43,7 +43,7 @@ class InputEmbedding(layers.Layer):
         inp = tf.expand_dims(inp, axis=-1)
         time = tf.expand_dims(time, axis=-1)
         mod = tf.expand_dims(mod, axis=-1)
-
+    
         # Calculate encodings
         inp_enc = self.inp_encoding(inp)  # (n, d)
         mod_enc = self.mod_encoding(mod)  # (n, d)
@@ -134,6 +134,7 @@ class ClassPredictionLayer(layers.Layer):
         super().__init__()
         self.dropout = layers.Dropout(drop_rate)
         self.causal_mask = causal_mask
+        self.ff_dim = int(ff_dim)
 
         # Dense layers to predict classes
         self.densePred1 = layers.Dense(ff_dim, activation='relu')
@@ -148,7 +149,7 @@ class ClassPredictionLayer(layers.Layer):
         """
         # Get variables for batch segment ids
         batch_seg_ids, _ = tf.unique(batch_seg)
-        n_batch_seg = batch_seg_ids.shape[0]
+        n_batch_seg = tf.shape(batch_seg_ids)[0]
 
         batch_out_arr = tf.TensorArray(
             inp.dtype, size=n_batch_seg, infer_shape=False)
@@ -177,6 +178,7 @@ class ClassPredictionLayer(layers.Layer):
 
         # Concat batch outputs
         out = batch_out_arr.concat()
+        out.set_shape([None, self.ff_dim])
 
         return out
 

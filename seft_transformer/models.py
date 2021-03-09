@@ -120,8 +120,8 @@ class TimeSeriesTransformer(keras.Model):
           return: prediction
         """
         # Get inputs
-        time = tf.squeeze(inputs[1])  # (b, t)
-        inp = tf.squeeze(inputs[2])   # (b, t)
+        time = tf.squeeze(inputs[1], axis=-1)  # (b, t)
+        inp = tf.squeeze(inputs[2], axis=-1)   # (b, t)
         mod = inputs[3]  # (b, t)
         count = inputs[4]  # (b)
         mask = tf.sequence_mask(count)  # (b, t)
@@ -136,7 +136,7 @@ class TimeSeriesTransformer(keras.Model):
         # If none    --> pos_enc in inp_enc
         inp_enc = self.input_embedding(
             inp_set, pos_set, mod_set)  # (n, d)
-        
+    
         # Calculate attention
         attn = self.transformer_encoder(
             inp_enc, pos_set, mod_set, batch_seg)  # (n, d)

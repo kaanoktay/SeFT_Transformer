@@ -87,11 +87,11 @@ class ModEncodingBlock(layers.Layer):
         Input shapes:
           mod: (n, 1)
         Output shapes:
-          return: (n, 1, d)
+          return: (n, d)
         """
         # Calculate modality data encodings
         mod_enc = self.embedding_layer(mod)  # (n, 1, d)
-        return tf.squeeze(mod_enc) # (n, d)
+        return tf.squeeze(mod_enc, axis=1)  # (n, d)
 
 
 class SeqAttentionBlock(layers.Layer):
@@ -258,6 +258,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
             proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate
         )
 
+        self.proj_dim = proj_dim
         self.dense = layers.Dense(enc_dim)
     
     def pos_while_loop(self, inp, pos):
@@ -270,7 +271,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
         """
         # Get variables for pos segment ids
         pos_seg_ids, _ = tf.unique(pos)
-        n_pos_seg = pos_seg_ids.shape[0]
+        n_pos_seg = tf.shape(pos_seg_ids)[0]
 
         pos_out_arr = tf.TensorArray(
             inp.dtype, size=n_pos_seg, infer_shape=False)
@@ -318,7 +319,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
         """
         # Get variables for mod segment ids
         mod_seg_ids, _ = tf.unique(mod)
-        n_mod_seg = mod_seg_ids.shape[0]
+        n_mod_seg = tf.shape(mod_seg_ids)[0]
 
         mod_out_arr = tf.TensorArray(
             inp.dtype, size=n_mod_seg, infer_shape=False)
@@ -359,13 +360,13 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
     def batch_while_loop(self, inp, pos, mod, batch_seg):
         # Get variables for batch segment ids
         batch_seg_ids, _ = tf.unique(batch_seg)
-        n_batch_seg = batch_seg_ids.shape[0]
+        n_batch_seg = tf.shape(batch_seg_ids)[0]
 
         batch_out_arr = tf.TensorArray(
             inp.dtype, size=n_batch_seg, infer_shape=False)
         batch_out_seg = tf.TensorArray(
             tf.int32, size=n_batch_seg, infer_shape=False)
-
+        
         def loop_cond(i, out, out_seg):
             return i < n_batch_seg
 
@@ -375,17 +376,21 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
                 tf.where(tf.equal(batch_seg, curr_seg)),
                 dtype=tf.int32
             )
-            
+
             curr_inp = tf.gather_nd(inp, curr_ind)
             curr_pos = tf.gather_nd(pos, curr_ind)
             curr_mod = tf.gather_nd(mod, curr_ind)
             
+            # Sequence attention
+            attn = self.seqAttention(curr_inp, curr_pos)  # (n_t, p)
+            """
             # Sequence attention
             pos_attn = self.mod_while_loop(
                 curr_inp, curr_mod, curr_pos)  # (n, p)
             # Modality attention
             attn = self.pos_while_loop(
                 pos_attn, curr_pos)  # (n, p)
+            """
 
             out_seg = out_seg.write(i, curr_ind)
             out = out.write(i, attn)
@@ -400,6 +405,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
 
         # Concat batch outputs
         out = batch_out_arr.concat()
+        out.set_shape([None, self.proj_dim])
 
         return out
 
@@ -413,8 +419,8 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
           return: (n, d)
         """
         # Calculate sequential + modality attention
-        out = self.batch_while_loop(inp, pos, mod, batch_seg)
-
+        out = self.batch_while_loop(inp, pos, mod, batch_seg)  # (n, p)
+        
         # Linear projection to encoding dimension
         out = self.dense(out)  # (n, d)
 
