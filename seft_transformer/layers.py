@@ -39,6 +39,12 @@ class InputEmbedding(layers.Layer):
         Output shapes:
           return: (n, d)
         """
+        # Add an extra dimension for encodings
+        inp = rearrange(inp, 'n -> n 1')
+        time = rearrange(time, 'n -> n 1')
+        mod = rearrange(mod, 'n -> n 1')
+
+        # Calculate encodings
         inp_enc = self.inp_encoding(inp)  # (n, d)
         mod_enc = self.mod_encoding(mod)  # (n, d)
         if self.no_time or self.equivar:
@@ -66,13 +72,14 @@ class AxialAttentionEncoderLayer(layers.Layer):
                  num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False,
                  equivar=False):
-        super(AxialAttentionEncoderLayer, self).__init__()
+        super().__init__()
 
         self.axAttention = AxialMultiHeadAttentionBlock(
             proj_dim=proj_dim, enc_dim=enc_dim,
             num_head=num_head, drop_rate=drop_rate,
             causal_mask=causal_mask, equivar=equivar,
         )
+
         self.posFeedforward = PosFeedforwardBlock(
             enc_dim=enc_dim, ff_dim=ff_dim, drop_rate=drop_rate
         )
@@ -97,21 +104,26 @@ class AxialAttentionEncoderLayer(layers.Layer):
         self.residual1 = get_residual()
         self.residual2 = get_residual()
 
-    def call(self, inp, pos, mask):
+    def call(self, inp, pos, mod, batch_seg):
         """
         Input shapes:
-          inp:  (b, t, m, d)
-          pos:  (b, t, t, d)
-          mask: (b, t, m)
+          inp:  (n, d)
+          pos:  (n, 1)
         Output shapes:
-          return: (b, t, m, d)
+          return: (n, d)
         """
-        # Calculate attention and apply residual + normalization
-        attn = self.axAttention(inp, pos, mask)  # (b, t, m, d)
-        attn = self.norm1(self.residual1(inp, attn))  # (b, t, m, d)
-        # Calculate positionwise feedforward and apply residual + normalization
-        attn_ffn = self.posFeedforward(attn)  # (b, t, m, d)
-        attn_ffn = self.norm2(self.residual2(attn, attn_ffn))  # (b, t, m, d)
+        # Calculate attention
+        attn = self.axAttention(inp, pos, mod, batch_seg)   # (n, d)
+
+        # Apply residual + normalization
+        attn = self.norm1(self.residual1(inp, attn))  # (n, d)
+
+        # Calculate positionwise feedforward
+        attn_ffn = self.posFeedforward(attn)  # (n, d)
+        
+        # Apply residual + normalization
+        attn_ffn = self.norm2(self.residual2(attn, attn_ffn))  # (n, d)
+
         return attn_ffn
 
 
@@ -119,46 +131,70 @@ class ClassPredictionLayer(layers.Layer):
     """Layer for predicting a class output from a series."""
 
     def __init__(self, ff_dim=32, drop_rate=0.2, causal_mask=False):
-        super(ClassPredictionLayer, self).__init__()
-        self.ff_dim = ff_dim
+        super().__init__()
         self.dropout = layers.Dropout(drop_rate)
         self.causal_mask = causal_mask
 
-    def build(self, input_shape):
         # Dense layers to predict classes
-        self.densePred1 = layers.Dense(self.ff_dim, activation='relu')
+        self.densePred1 = layers.Dense(ff_dim, activation='relu')
         self.densePred2 = layers.Dense(1, activation='sigmoid')
-
-    def call(self, inp, mask):
-        """Predict class.
-
+    
+    def sum_while_loop(self, inp, batch_seg):
+        """
         Input shapes:
-          inp:  (b, t, m, d)
-          mask: (b, t, m)
+          inp:  (n, f)
+        Output shapes:
+          return: (b, f)
+        """
+        # Get variables for batch segment ids
+        batch_seg_ids, _ = tf.unique(batch_seg)
+        n_batch_seg = batch_seg_ids.shape[0]
+
+        batch_out_arr = tf.TensorArray(
+            inp.dtype, size=n_batch_seg, infer_shape=False)
+
+        def loop_cond(i, out):
+            return i < n_batch_seg
+
+        def loop_body(i, out):
+            curr_seg = batch_seg_ids[i]
+            curr_ind = tf.cast(tf.where(tf.equal(batch_seg, curr_seg)),
+                               dtype=tf.int32)
+            curr_inp = tf.gather_nd(inp, curr_ind)
+            
+            inp_sum = tf.math.reduce_mean(
+                curr_inp, axis=0, keepdims=True)
+
+            out = out.write(i, inp_sum)
+
+            return i+1, out
+
+        i_end, batch_out_arr = tf.while_loop(
+            loop_cond,
+            loop_body,
+            loop_vars=(tf.constant(0), batch_out_arr)
+        )
+
+        # Concat batch outputs
+        out = batch_out_arr.concat()
+
+        return out
+
+    def call(self, inp, batch_seg):
+        """Predict class.
+        
+        Input shapes:
+          inp:  (n, d)
         Output shapes:
           return: (b, 1)
         """
-        # Mask the padded values with 0's
-        if mask is not None:
-            mask = rearrange(mask, 'b t m -> b t m 1')
-            inp = tf.where(mask, inp, 0)
-        out = self.densePred1(self.dropout(inp)) # (b, t, m, f)
-        # Calculate sum over the modalities
-        if self.causal_mask:
-            out = reduce(out, 'b t m f -> b t f', 'sum')
-        # Calculate sum over the timesteps and modalities
-        else:
-            out = reduce(out, 'b t m f -> b f', 'sum')
-        # Calculate number of measured samples and normalize the sum
-        mask = tf.cast(mask, dtype='float32')
-        if self.causal_mask:
-            norm = reduce(mask, 'b t m 1-> b t 1', 'sum')
-            out = out / norm  # (b, t, f)
-            out = tf.where(tf.math.is_nan(out), 0.0, out)
-        else:
-            norm = reduce(mask, 'b t m 1-> b 1', 'sum')
-            out = out / norm  # (b, f)
-        # Predict the class
-        # Project to an intermediate dimension
+        # Project to intermediate dimension
+        out = self.densePred1(self.dropout(inp)) # (n, f)
+
+        # Calculate sum within each batch
+        out = self.sum_while_loop(out, batch_seg) # (b, f)
+
+        # Predict ckass 
         pred = self.densePred2(out) # (b, 1)
-        return pred  # if causal_mask (b, t, 1) else (b, 1)
+
+        return pred  # (b, 1)

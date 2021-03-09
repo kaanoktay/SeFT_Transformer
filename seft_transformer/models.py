@@ -20,23 +20,28 @@ class TimeSeriesTransformer(keras.Model):
                  pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.2, 
                  norm_type='reZero', dataset='physionet2012',
                  equivar=False, num_layers=1, no_time=False):
-        super(TimeSeriesTransformer, self).__init__()
+        super().__init__()
+
         if dataset=='physionet2019':
             self.causal_mask = True
         else:
             self.causal_mask = False
+        
         self.input_embedding = InputEmbedding(
             enc_dim=enc_dim, equivar=equivar, no_time=no_time
         )
+
         self.transformer_encoder = AxialAttentionEncoderLayer(
             proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
             ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type,
             causal_mask=self.causal_mask, equivar=equivar
         )
+
         self.class_prediction = ClassPredictionLayer(
             ff_dim=pred_ff_dim, drop_rate=drop_rate,
             causal_mask=self.causal_mask
         )
+
         self.equivar = equivar
         self.to_segments = PaddedToSegments()
     
@@ -122,36 +127,22 @@ class TimeSeriesTransformer(keras.Model):
         mask = tf.sequence_mask(count)  # (b, t)
 
         # Get input, time and modality sets
-        time_set, segment_ids = self.to_segments(time, mask)
+        pos_set, batch_seg = self.to_segments(time, mask)
         inp_set, _ = self.to_segments(inp, mask)
         mod_set, _ = self.to_segments(mod, mask)
-        
-        # Get variables for segment ids
-        # Batch
-        batch_segment_ids, _ = tf.unique(segment_ids)
-        n_batch_segments = batch_segment_ids.shape[0]
-        # Time
-        time_segment_ids, _ = tf.unique(time_set)
-        n_time_segments = time_segment_ids.shape[0]
-        # Modality
-        mod_segment_ids, _ = tf.unique(mod_set)
-        n_mod_segments = mod_segment_ids.shape[0]
-
-        # Add an extra dimension for embedding
-        inp_set = rearrange(inp_set, 'n -> n 1')
-        time_set = rearrange(time_set, 'n -> n 1')
-        mod_set = rearrange(mod_set, 'n -> n 1')
 
         # If no_time --> no time information used for inp_enc
-        # If equivar --> time_enc will be calculated on fly
-        # If none    --> time_enc in inp_enc
+        # If equivar --> pos_enc will be calculated on fly
+        # If none    --> pos_enc in inp_enc
         inp_enc = self.input_embedding(
-            inp_set, time_set, mod_set)
+            inp_set, pos_set, mod_set)  # (n, d)
+        
         # Calculate attention
         attn = self.transformer_encoder(
-            inp_enc, pos_enc)
-        # Make prediction: if causal_mask (b, t, 1) else (n, 1)
-        pred = self.class_prediction(attn, mask)
+            inp_enc, pos_set, mod_set, batch_seg)  # (n, d)
+        
+        # Make prediction
+        pred = self.class_prediction(attn, batch_seg)  # (b, 1)
 
         if self.causal_mask:
             return pred, count
