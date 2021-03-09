@@ -154,11 +154,11 @@ def main():
         callbacks=[lr_schedule_callback,
                    lr_warmup_callback,
                    lr_logger_callback,
-                   #WandbCallback(),
+                   WandbCallback(),
                    early_stopping_callback]
     )
 
-    model.save(os.path.join(wandb.run.dir, "model.h5"))
+    model.save(os.path.join(wandb.run.dir, "model"))
 
     print("\n------- Test -------")
     # Fit the model to the input data
