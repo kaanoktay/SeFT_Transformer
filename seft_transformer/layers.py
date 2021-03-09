@@ -33,16 +33,16 @@ class InputEmbedding(layers.Layer):
     def call(self, inp, time, mod):
         """
         Input shapes:
-          inp:  (n, 1)
-          time: (n, 1)
-          mod:  (n, 1)
+          inp:  (n,)
+          time: (n,)
+          mod:  (n,)
         Output shapes:
           return: (n, d)
         """
         # Add an extra dimension for encodings
-        inp = rearrange(inp, 'n -> n 1')
-        time = rearrange(time, 'n -> n 1')
-        mod = rearrange(mod, 'n -> n 1')
+        inp = tf.expand_dims(inp, axis=-1)
+        time = tf.expand_dims(time, axis=-1)
+        mod = tf.expand_dims(mod, axis=-1)
 
         # Calculate encodings
         inp_enc = self.inp_encoding(inp)  # (n, d)
