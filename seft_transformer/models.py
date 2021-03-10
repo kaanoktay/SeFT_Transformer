@@ -7,7 +7,7 @@ import sys
 from .training_utils import PaddedToSegments
 
 from .layers import (
-    AxialAttentionEncoderLayer,
+    MultiLayerAttentionEncoder,
     ClassPredictionLayer,
     InputEmbedding
 )
@@ -31,10 +31,11 @@ class TimeSeriesTransformer(keras.Model):
             enc_dim=enc_dim, equivar=equivar, no_time=no_time
         )
 
-        self.transformer_encoder = AxialAttentionEncoderLayer(
+        self.transformer_encoder = MultiLayerAttentionEncoder(
             proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
             ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type,
-            causal_mask=self.causal_mask, equivar=equivar
+            causal_mask=self.causal_mask, equivar=equivar,
+            num_layers=num_layers
         )
 
         self.class_prediction = ClassPredictionLayer(

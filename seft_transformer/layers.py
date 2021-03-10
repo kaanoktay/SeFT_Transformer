@@ -77,7 +77,7 @@ class AxialAttentionEncoderLayer(layers.Layer):
         self.axAttention = AxialMultiHeadAttentionBlock(
             proj_dim=proj_dim, enc_dim=enc_dim,
             num_head=num_head, drop_rate=drop_rate,
-            causal_mask=causal_mask, equivar=equivar,
+            causal_mask=causal_mask, equivar=equivar
         )
 
         self.posFeedforward = PosFeedforwardBlock(
@@ -109,6 +109,7 @@ class AxialAttentionEncoderLayer(layers.Layer):
         Input shapes:
           inp:  (n, d)
           pos:  (n, 1)
+          pos:  (n, 1)
         Output shapes:
           return: (n, d)
         """
@@ -126,6 +127,40 @@ class AxialAttentionEncoderLayer(layers.Layer):
 
         return attn_ffn
 
+
+class MultiLayerAttentionEncoder(layers.Layer):
+    def __init__(self, proj_dim=128, enc_dim=128, 
+                 num_head=4, ff_dim=128, drop_rate=0.2, 
+                 norm_type="reZero", causal_mask=False,
+                 equivar=False, num_layers=1):
+        super().__init__()
+
+        self.layers = []
+
+        for _ in range(num_layers):
+            self.layers.append(
+                AxialAttentionEncoderLayer(
+                    proj_dim=proj_dim, enc_dim=enc_dim,
+                    num_head=num_head, ff_dim=ff_dim, 
+                    drop_rate=drop_rate, norm_type=norm_type, 
+                    causal_mask=causal_mask, equivar=equivar
+                )
+            )
+
+    def call(self, inp, pos, mod, batch_seg):
+        """
+        Input shapes:
+          inp:  (n, d)
+          pos:  (n, 1)
+        Output shapes:
+          return: (n, d)
+        """
+        attn = inp
+        for layer in self.layers:
+            attn = layer(attn, pos, mod, batch_seg)
+
+        return attn
+            
 
 class ClassPredictionLayer(layers.Layer):
     """Layer for predicting a class output from a series."""
