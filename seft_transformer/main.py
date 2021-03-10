@@ -138,7 +138,7 @@ def main():
     early_stopping_callback = keras.callbacks.EarlyStopping(
         monitor='val_loss',
         mode='min',
-        patience=10,
+        patience=14,
         restore_best_weights=True
     )
 
