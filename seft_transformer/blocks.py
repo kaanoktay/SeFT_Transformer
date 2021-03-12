@@ -395,7 +395,7 @@ class MultiHeadAttentionBlock(layers.Layer):
                     pos_attn, curr_pos)  # (n, p)
             else:
                 # Attention
-                attn = self.modAttention(curr_inp)  # (n_t, p)
+                attn = self.seqAttention(curr_inp, curr_pos)  # (n_t, p)
 
             out_seg = out_seg.write(i, curr_ind)
             out = out.write(i, attn)
