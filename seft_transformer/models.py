@@ -102,7 +102,7 @@ class TimeSeriesTransformer(keras.Model):
             self.compiled_loss(y, y_pred, sample_weight)
         else:
             # Forward pass
-            y_pred = self(x, training=True)
+            y_pred = self(x, training=False)
             # Compute the loss value
             self.compiled_loss(y, y_pred)
 
