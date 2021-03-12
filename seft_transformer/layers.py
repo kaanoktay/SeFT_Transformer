@@ -5,7 +5,7 @@ from einops import rearrange, reduce
 import sys
 
 from .blocks import (
-    AxialMultiHeadAttentionBlock,
+    MultiHeadAttentionBlock,
     PosEncodingBlock,
     InpEncodingBlock,
     ModEncodingBlock,
@@ -67,17 +67,18 @@ class ReZero(layers.Layer):
         return x1 + self.re_weight * x2
 
 
-class AxialAttentionEncoderLayer(layers.Layer):
+class Attention(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, 
                  num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False,
-                 equivar=False):
+                 equivar=False, ax_attn=False):
         super().__init__()
 
-        self.axAttention = AxialMultiHeadAttentionBlock(
+        self.axAttention = MultiHeadAttentionBlock(
             proj_dim=proj_dim, enc_dim=enc_dim,
             num_head=num_head, drop_rate=drop_rate,
-            causal_mask=causal_mask, equivar=equivar
+            causal_mask=causal_mask, equivar=equivar,
+            ax_attn=ax_attn
         )
 
         self.posFeedforward = PosFeedforwardBlock(
@@ -109,7 +110,7 @@ class AxialAttentionEncoderLayer(layers.Layer):
         Input shapes:
           inp:  (n, d)
           pos:  (n, 1)
-          pos:  (n, 1)
+          mod:  (n, 1)
         Output shapes:
           return: (n, d)
         """
@@ -128,22 +129,23 @@ class AxialAttentionEncoderLayer(layers.Layer):
         return attn_ffn
 
 
-class MultiLayerAttentionEncoder(layers.Layer):
-    def __init__(self, proj_dim=128, enc_dim=128, 
+class MultiLayerAttention(layers.Layer):
+    def __init__(self, proj_dim=128, enc_dim=128,
                  num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False,
-                 equivar=False, num_layers=1):
+                 equivar=False, num_layers=1, ax_attn=False):
         super().__init__()
 
         self.layers = []
 
-        for _ in range(num_layers):
+        for i in range(num_layers):
             self.layers.append(
-                AxialAttentionEncoderLayer(
+                Attention(
                     proj_dim=proj_dim, enc_dim=enc_dim,
                     num_head=num_head, ff_dim=ff_dim, 
                     drop_rate=drop_rate, norm_type=norm_type, 
-                    causal_mask=causal_mask, equivar=equivar
+                    causal_mask=causal_mask, equivar=equivar,
+                    ax_attn=ax_attn
                 )
             )
 
@@ -152,17 +154,19 @@ class MultiLayerAttentionEncoder(layers.Layer):
         Input shapes:
           inp:  (n, d)
           pos:  (n, 1)
+          mod:  (n, 1)
         Output shapes:
           return: (n, d)
         """
         attn = inp
+        
         for layer in self.layers:
             attn = layer(attn, pos, mod, batch_seg)
 
         return attn
             
 
-class ClassPredictionLayer(layers.Layer):
+class ClassPrediction(layers.Layer):
     """Layer for predicting a class output from a series."""
 
     def __init__(self, ff_dim=32, drop_rate=0.2, causal_mask=False):

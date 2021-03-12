@@ -27,17 +27,17 @@ class PosEncodingBlock(layers.Layer):
                   (n, d) else
         """
         if self.equivar:
-            rel_time = rearrange(time, 'b t -> b t 1') - \
-                rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
+            rel_time = rearrange(time, 'n -> n 1') - \
+                 rearrange(time, 'n -> 1 n')  #(n, n)
             # Calculate sine and cosine components
             angles = tf.einsum(
-                'btl,f->btlf', rel_time, self.f)  # (b, t, t, d/2)
-            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, t, d/2)
-            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, t, d/2)
+                'tl,f->tlf', rel_time, self.f)  # (n, n, d/2)
+            sin_enc = tf.math.sin(angles)  # sin encodings (n, n, d/2)
+            cos_enc = tf.math.cos(angles)  # cos encodings (n, n, d/2)
             # Construct positional encodings
             pos_enc = rearrange(
-                [sin_enc, cos_enc],  'z b t l k -> b t l (k z)')
-            return pos_enc  # (b, t, t, d)
+                [sin_enc, cos_enc],  'z t l k -> t l (k z)')
+            return pos_enc  # (n, n, d)
         else:
             # Calculate sine and cosine components
             angles = tf.einsum(
@@ -97,8 +97,8 @@ class ModEncodingBlock(layers.Layer):
 class SeqAttentionBlock(layers.Layer):
     """Sequential attention layer."""
 
-    def __init__(self, proj_dim=128, num_head=4, drop_rate=0.2, 
-                 causal_mask=False, equivar=False):
+    def __init__(self, proj_dim=128, enc_dim=128, num_head=4, 
+                 drop_rate=0.2, causal_mask=False, equivar=False):
         super().__init__()
         self.num_head = num_head
         self.embed_dim = proj_dim // num_head
@@ -111,15 +111,15 @@ class SeqAttentionBlock(layers.Layer):
         self.value_dense = layers.Dense(proj_dim)
 
         if equivar:
-            self.time_dense = layers.Dense(self.proj_dim)
-            self.qt_dense = layers.Dense(self.proj_dim)
-
+            self.time_dense = layers.Dense(proj_dim)
+            self.qt_dense = layers.Dense(proj_dim)
+            self.pos_encoding = PosEncodingBlock(enc_dim, equivar)
 
     def call(self, inp, pos):
         """
         Input shapes:
           inp:  (n_t, d)
-          pos:  (n_t, 1)
+          pos:  (n_t,)
         Output shapes:
           return: (n_t, p)
         """
@@ -139,11 +139,13 @@ class SeqAttentionBlock(layers.Layer):
         score = score / (self.embed_dim**0.5)  # (h, n_t, e)
 
         if self.equivar:
+            # Calculate relative positional encodings
+            pos = self.pos_encoding(pos)  # (n_t, n_t, d)
             # Project query/key for time
-            q_t = self.qt_dense(pos)
-            q_t = rearrange(k, 'n (h e) -> h n e',
+            q_t = self.qt_dense(inp)  # (n_t, p)
+            q_t = rearrange(q_t, 'n (h e) -> h n e',
                             h=self.num_head)  # (h, n_t, e)
-            t = self.time_dense(pos)
+            t = self.time_dense(pos)  
             t = rearrange(t, 'n1 n2 (h e) -> h n1 n2 e',
                           h=self.num_head)    # (h, n_t, n_t, e)
             score = score + tf.linalg.matvec(t, q_t)/(self.embed_dim**0.5)
@@ -242,21 +244,24 @@ class ModAttentionBlock(layers.Layer):
         return concat_out
 
 
-class AxialMultiHeadAttentionBlock(layers.Layer):
+class MultiHeadAttentionBlock(layers.Layer):
     """Multi head attention layer."""
 
     def __init__(self, proj_dim=128, enc_dim=128, num_head=4,
-                 drop_rate=0.2, causal_mask=False, equivar=False):
+                 drop_rate=0.2, causal_mask=False, equivar=False,
+                 ax_attn=False):
         super().__init__()
 
         self.seqAttention = SeqAttentionBlock(
-            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate,
-            causal_mask=causal_mask, equivar=equivar
+            proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
+            drop_rate=drop_rate, causal_mask=causal_mask, equivar=equivar
         )
 
         self.modAttention = ModAttentionBlock(
             proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate
         )
+
+        self.ax_attn = ax_attn
 
         self.proj_dim = proj_dim
         self.dense = layers.Dense(enc_dim)
@@ -304,7 +309,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
         # Concat batch outputs
         out_arr = pos_out_arr.concat()
         out_seg = pos_out_seg.concat()
-        out = tf.scatter_nd(out_seg, out_arr, inp.shape)
+        out = tf.scatter_nd(out_seg, out_arr, tf.shape(inp))
         
         return out
 
@@ -353,7 +358,7 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
         # Concat batch outputs
         out_arr = mod_out_arr.concat()
         out_seg = mod_out_seg.concat()
-        out = tf.scatter_nd(out_seg, out_arr, inp.shape)
+        out = tf.scatter_nd(out_seg, out_arr, tf.shape(inp))
 
         return out
     
@@ -381,16 +386,16 @@ class AxialMultiHeadAttentionBlock(layers.Layer):
             curr_pos = tf.gather_nd(pos, curr_ind)
             curr_mod = tf.gather_nd(mod, curr_ind)
             
-            # Sequence attention
-            attn = self.seqAttention(curr_inp, curr_pos)  # (n_t, p)
-            """
-            # Sequence attention
-            pos_attn = self.mod_while_loop(
-                curr_inp, curr_mod, curr_pos)  # (n, p)
-            # Modality attention
-            attn = self.pos_while_loop(
-                pos_attn, curr_pos)  # (n, p)
-            """
+            if self.ax_attn:
+                # Sequence attention
+                pos_attn = self.mod_while_loop(
+                    curr_inp, curr_mod, curr_pos)  # (n, p)
+                # Modality attention
+                attn = self.pos_while_loop(
+                    pos_attn, curr_pos)  # (n, p)
+            else:
+                # Attention
+                attn = self.modAttention(curr_inp)  # (n_t, p)
 
             out_seg = out_seg.write(i, curr_ind)
             out = out.write(i, attn)

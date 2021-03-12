@@ -7,8 +7,8 @@ import sys
 from .training_utils import PaddedToSegments
 
 from .layers import (
-    MultiLayerAttentionEncoder,
-    ClassPredictionLayer,
+    MultiLayerAttention,
+    ClassPrediction,
     InputEmbedding
 )
 
@@ -19,7 +19,8 @@ class TimeSeriesTransformer(keras.Model):
     def __init__(self, proj_dim=128, num_head=4, enc_dim=128, 
                  pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.2, 
                  norm_type='reZero', dataset='physionet2012',
-                 equivar=False, num_layers=1, no_time=False):
+                 equivar=False, num_layers=1, no_time=False,
+                 ax_attn=False):
         super().__init__()
 
         if dataset=='physionet2019':
@@ -31,20 +32,21 @@ class TimeSeriesTransformer(keras.Model):
             enc_dim=enc_dim, equivar=equivar, no_time=no_time
         )
 
-        self.transformer_encoder = MultiLayerAttentionEncoder(
+        self.transformer_encoder = MultiLayerAttention(
             proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
             ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type,
             causal_mask=self.causal_mask, equivar=equivar,
-            num_layers=num_layers
+            num_layers=num_layers, ax_attn=ax_attn
         )
 
-        self.class_prediction = ClassPredictionLayer(
+        self.class_prediction = ClassPrediction(
             ff_dim=pred_ff_dim, drop_rate=drop_rate,
             causal_mask=self.causal_mask
         )
 
         self.equivar = equivar
         self.to_segments = PaddedToSegments()
+        self.ax_attn = ax_attn
     
     def train_step(self, data):
         x, y = data
