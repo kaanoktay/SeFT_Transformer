@@ -31,7 +31,7 @@ def parse_arguments():
                         metavar="200", help='number of epochs')
     parser.add_argument('--init_lr', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=2e2,
+    parser.add_argument('--lr_warmup_steps', type=float, default=5e3,
                         metavar="2e3", help='learning rate warmup steps')
     parser.add_argument('--dropout_rate', type=float, default=0.1,
                         metavar="0.1", help='dropout rate')
