@@ -51,6 +51,8 @@ def parse_arguments():
                         action='store_true')
     parser.add_argument('--ax_attn', default=False,
                         action='store_true')
+    parser.add_argument('--train_time_enc', default=False,
+                        action='store_true')
     return parser.parse_args()
 
 def main():
@@ -74,6 +76,7 @@ def main():
     equivariance = args.equivariance  # Default: False
     no_time = args.no_time  # Default: False
     ax_attn = args.ax_attn  # Default: False
+    train_time_enc = args.train_time_enc  # Default: False
 
     # Load data
     transformation = Preprocessing(
@@ -89,7 +92,8 @@ def main():
         pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
         norm_type=norm_type, dataset=dataset,
         equivar=equivariance, num_layers=num_layers,
-        no_time=no_time, ax_attn=ax_attn
+        no_time=no_time, ax_attn=ax_attn,
+        train_time_enc=train_time_enc
     )
 
     # Optimizer function

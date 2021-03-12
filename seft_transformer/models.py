@@ -20,7 +20,7 @@ class TimeSeriesTransformer(keras.Model):
                  pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.2, 
                  norm_type='reZero', dataset='physionet2012',
                  equivar=False, num_layers=1, no_time=False,
-                 ax_attn=False):
+                 ax_attn=False, train_time_enc=False):
         super().__init__()
 
         if dataset=='physionet2019':
@@ -29,7 +29,8 @@ class TimeSeriesTransformer(keras.Model):
             self.causal_mask = False
         
         self.input_embedding = InputEmbedding(
-            enc_dim=enc_dim, equivar=equivar, no_time=no_time
+            enc_dim=enc_dim, equivar=equivar, no_time=no_time,
+            train_time_enc=train_time_enc
         )
 
         self.transformer_encoder = MultiLayerAttention(

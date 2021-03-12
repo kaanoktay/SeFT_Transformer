@@ -14,12 +14,12 @@ from .blocks import (
 
 
 class InputEmbedding(layers.Layer):
-    def __init__(self, enc_dim=128, equivar=False, 
-                 no_time=False):
+    def __init__(self, enc_dim=128, equivar=False, no_time=False,
+                 train_time_enc=False):
         super().__init__()
 
         self.pos_encoding = PosEncodingBlock(
-            enc_dim=enc_dim
+            enc_dim=enc_dim, train_time_enc=train_time_enc
         )
         self.inp_encoding = InpEncodingBlock(
             enc_dim=enc_dim

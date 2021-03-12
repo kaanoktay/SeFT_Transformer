@@ -9,13 +9,15 @@ import sys
 class PosEncodingBlock(layers.Layer):
     """Positional encodings layer."""
 
-    def __init__(self, enc_dim=128, equivar=False):
+    def __init__(self, enc_dim=128, equivar=False,
+                 train_time_enc=False):
         super().__init__()
         f = tf.math.exp(
             tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
             * -(tf.math.log(10000.0) / enc_dim)
         )
-        self.f = tf.Variable(f, trainable=False)
+
+        self.f = tf.Variable(f, trainable=train_time_enc)
         self.equivar = equivar
 
     def call(self, time):
