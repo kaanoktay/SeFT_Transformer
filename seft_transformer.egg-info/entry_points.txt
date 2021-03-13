@@ -1,3 +1,0 @@
-[console_scripts]
-main = seft_transformer.main:main
-
