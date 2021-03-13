@@ -5,3 +5,4 @@ logs/
 .DS_Store
 wandb/
 .vscode/
+seft_transformer.egg-info
