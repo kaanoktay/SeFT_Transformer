@@ -3,7 +3,7 @@ import os
 import sys
 import tensorflow as tf
 
-from .training_utils import Preprocessing, parse_arguments
+from training_utils import Preprocessing, parse_arguments
 
 import wandb
 from wandb.keras import WandbCallback
