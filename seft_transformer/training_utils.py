@@ -1,6 +1,6 @@
 """Utility functions for training and evaluation."""
 import math
-
+import argparse
 from collections.abc import Sequence
 
 import tensorflow as tf
@@ -11,6 +11,41 @@ from .normalization import Normalizer
 get_output_shapes = tf.compat.v1.data.get_output_shapes
 get_output_types = tf.compat.v1.data.get_output_types
 make_one_shot_iterator = tf.compat.v1.data.make_one_shot_iterator
+
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Embedding Translational Equivariance to SeFT')
+    parser.add_argument('--batch_size', type=int, default=16,
+                        metavar="16", help='batch size')
+    parser.add_argument('--num_epochs', type=int, default=200,
+                        metavar="200", help='number of epochs')
+    parser.add_argument('--init_lr', type=float, default=1e-4,
+                        metavar="1e-4", help='initial learning rate')
+    parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
+                        metavar="2e3", help='learning rate warmup steps')
+    parser.add_argument('--dropout_rate', type=float, default=0.2,
+                        metavar="0.2", help='dropout rate')
+    parser.add_argument('--norm_type', type=str, default='reZero',
+                        metavar="reZero", help='normalization type')
+    parser.add_argument('--dataset', type=str, default='physionet2012',
+                        metavar='physionet2012', help='dataset name')
+    parser.add_argument('--num_layers', type=int, default='1',
+                        metavar='1', help='number of layers')
+    parser.add_argument('--proj_dim', type=int, default='32',
+                        metavar='32', help='projection dimension')
+    parser.add_argument('--num_heads', type=int, default='2',
+                        metavar='2', help='number of heads')
+    parser.add_argument('--equivariance', default=False, 
+                        action='store_true')
+    parser.add_argument('--no_time', default=False,
+                        action='store_true')
+    parser.add_argument('--ax_attn', default=False,
+                        action='store_true')
+    parser.add_argument('--train_time_enc', default=False,
+                        action='store_true')
+    return parser.parse_args()
 
 
 class PaddedToSegments(tf.keras.layers.Layer):

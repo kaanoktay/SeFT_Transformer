@@ -1,18 +1,12 @@
 """Main module for training models."""
-import argparse
 import os
 import sys
 import tensorflow as tf
-import pdb
-from tensorflow import keras
 
-from .training_utils import Preprocessing
-from .models import TimeSeriesTransformer
-from .callbacks import WarmUpScheduler, LearningRateLogger
+from .training_utils import Preprocessing, parse_arguments
 
 import wandb
 from wandb.keras import WandbCallback
-wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
 from tensorflow.python.util import deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
@@ -21,46 +15,9 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.random.set_seed(83)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
 
-def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description='Embedding Translational Equivariance to SeFT')
-    parser.add_argument('--batch_size', type=int, default=16,
-                        metavar="16", help='batch size')
-    parser.add_argument('--num_epochs', type=int, default=200,
-                        metavar="200", help='number of epochs')
-    parser.add_argument('--init_lr', type=float, default=1e-4,
-                        metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
-                        metavar="2e3", help='learning rate warmup steps')
-    parser.add_argument('--dropout_rate', type=float, default=0.2,
-                        metavar="0.2", help='dropout rate')
-    parser.add_argument('--norm_type', type=str, default='reZero',
-                        metavar="reZero", help='normalization type')
-    parser.add_argument('--dataset', type=str, default='physionet2012',
-                        metavar='physionet2012', help='dataset name')
-    parser.add_argument('--num_layers', type=int, default='1',
-                        metavar='1', help='number of layers')
-    parser.add_argument('--proj_dim', type=int, default='32',
-                        metavar='32', help='projection dimension')
-    parser.add_argument('--num_heads', type=int, default='2',
-                        metavar='2', help='number of heads')
-    parser.add_argument('--equivariance', default=False, 
-                        action='store_true')
-    parser.add_argument('--no_time', default=False,
-                        action='store_true')
-    parser.add_argument('--ax_attn', default=False,
-                        action='store_true')
-    parser.add_argument('--train_time_enc', default=False,
-                        action='store_true')
-    return parser.parse_args()
-
 def main():
     """Parse command line arguments and train model."""
     args = parse_arguments()
-
-    # Add hyperparameters to wandb config
-    wandb.config.update(args)
 
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
@@ -86,96 +43,8 @@ def main():
         transformation._prepare_dataset_for_training()
     
     # Initialize the model
-    model = TimeSeriesTransformer(
-        proj_dim=proj_dim, num_head=num_heads,
-        enc_dim=proj_dim, pos_ff_dim=proj_dim,
-        pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
-        norm_type=norm_type, dataset=dataset,
-        equivar=equivariance, num_layers=num_layers,
-        no_time=no_time, ax_attn=ax_attn,
-        train_time_enc=train_time_enc
-    )
-
-    # Optimizer function
-    opt = keras.optimizers.Adam(
-        learning_rate=init_lr
-    )
-
-    # Loss function
-    if dataset == 'physionet2019':
-        loss_fn = keras.losses.BinaryCrossentropy(
-            from_logits=False,
-            name="loss",
-            reduction=tf.keras.losses.Reduction.SUM
-        )
-    else:
-        loss_fn = keras.losses.BinaryCrossentropy(
-            from_logits=False,
-            name="loss"
-        )
-
-    # Compile the model
-    model.compile(
-        optimizer=opt,
-        loss=loss_fn,
-        metrics=[keras.metrics.BinaryAccuracy(name='accuracy'),
-                 keras.metrics.AUC(curve='PR', name='auprc'),
-                 keras.metrics.AUC(curve='ROC', name='auroc')]
-    )
-
-    # Callback for logging the learning rate for inspection
-    lr_logger_callback = LearningRateLogger()
-
-    # Callback for warmup scheduler
-    lr_warmup_callback = WarmUpScheduler(
-        final_lr=init_lr,
-        warmup_steps=lr_warmup_steps
-    )
-
-    # Callback for reducing the learning rate when loss get stuck in a plateau
-    lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
-        monitor='val_loss',
-        mode='min',
-        factor=0.5,
-        patience=5,
-        min_lr=1e-8
-    )
-
-    # Callback for early stopping when val_loss does not improve anymore
-    early_stopping_callback = keras.callbacks.EarlyStopping(
-        monitor='val_loss',
-        mode='min',
-        patience=14,
-        restore_best_weights=True
-    )
-
-    # Fit the model to the input data
-    print("\n------- Training and Validation -------")
-    model.fit(
-        train_iter,
-        epochs=num_epochs,
-        steps_per_epoch=steps_per_epoch,
-        validation_data=val_iter,
-        validation_steps=val_steps,
-        verbose=1,
-        callbacks=[lr_schedule_callback,
-                   lr_warmup_callback,
-                   lr_logger_callback,
-                   WandbCallback(),
-                   early_stopping_callback]
-    )
-
-    model.save(os.path.join(wandb.run.dir, "model"))
-
-    print("\n------- Test -------")
-    # Fit the model to the input data
-    model.evaluate(
-        test_iter,
-        steps=test_steps,
-        verbose=1
-    )
-    print("\n")
-
+    
+    
 if __name__ == "__main__":
     main()
     
