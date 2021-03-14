@@ -8,13 +8,12 @@ authors = ["Anonymous"]
 python = "^3.7"
 einops = "^0.3.0"
 numpy = "^1.18.0"
-medical-ts-datasets = {path = "medical_ts_datasets"}
+medical-ts-datasets = { git = "https://github.com/ExpectationMax/medical_ts_datasets.git", branch = "master" }
 scikit-learn = "^0.22.2"
 tensorflow = "~2.3.0"
 tensorboard_plugin_profile = "~2.3.0"
 tqdm = "^4.45.0"
 wandb = "0.10.19"
-
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

@@ -246,76 +246,21 @@ class ModAttentionBlock(layers.Layer):
         return concat_out
 
 
-class MultiHeadAttentionBlock(layers.Layer):
+class ModWhileLoopBlock(layers.Layer):
     """Multi head attention layer."""
 
     def __init__(self, proj_dim=128, enc_dim=128, num_head=4,
-                 drop_rate=0.2, causal_mask=False, equivar=False,
-                 ax_attn=False):
+                 drop_rate=0.2, causal_mask=False, equivar=False):
         super().__init__()
+
+        self.proj_dim = proj_dim
 
         self.seqAttention = SeqAttentionBlock(
             proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
             drop_rate=drop_rate, causal_mask=causal_mask, equivar=equivar
         )
 
-        self.modAttention = ModAttentionBlock(
-            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate
-        )
-
-        self.ax_attn = ax_attn
-
-        self.proj_dim = proj_dim
-        self.dense = layers.Dense(enc_dim)
-    
-    def pos_while_loop(self, inp, pos):
-        """
-        Input shapes:
-          inp:  (n, p)
-          pos:  (n, 1)
-        Output shapes:
-          return: (n, p)
-        """
-        # Get variables for pos segment ids
-        pos_seg_ids, _ = tf.unique(pos)
-        n_pos_seg = tf.shape(pos_seg_ids)[0]
-
-        pos_out_arr = tf.TensorArray(
-            inp.dtype, size=n_pos_seg, infer_shape=False)
-        pos_out_seg = tf.TensorArray(
-            tf.int32, size=n_pos_seg, infer_shape=False)
-
-        def loop_cond(i, out, out_seg):
-            return i < n_pos_seg
-
-        def loop_body(i, out, out_seg):
-            curr_seg = pos_seg_ids[i]
-            curr_ind = tf.cast(tf.where(tf.equal(pos, curr_seg)),
-                               dtype=tf.int32)
-            curr_inp = tf.gather_nd(inp, curr_ind)  # (n_m, d)
-            
-            # Modality attention
-            attn = self.modAttention(curr_inp)  # (n_m, p)
-            
-            out_seg = out_seg.write(i, curr_ind)
-            out = out.write(i, attn)
-
-            return i+1, out, out_seg
-
-        i_end, pos_out_arr, pos_out_seg = tf.while_loop(
-            loop_cond,
-            loop_body,
-            loop_vars=(tf.constant(0), pos_out_arr, pos_out_seg)
-        )
-
-        # Concat batch outputs
-        out_arr = pos_out_arr.concat()
-        out_seg = pos_out_seg.concat()
-        out = tf.scatter_nd(out_seg, out_arr, tf.shape(inp))
-        
-        return out
-
-    def mod_while_loop(self, inp, mod, pos):
+    def call(self, inp, mod, pos):
         """
         Input shapes:
           inp:  (n, d)
@@ -363,11 +308,113 @@ class MultiHeadAttentionBlock(layers.Layer):
         out = tf.scatter_nd(out_seg, out_arr, tf.shape(inp))
 
         return out
-    
-    def batch_while_loop(self, inp, pos, mod, batch_seg):
+
+
+class SeqWhileLoopBlock(layers.Layer):
+    """Multi head attention layer."""
+
+    def __init__(self, proj_dim=128, num_head=4, drop_rate=0.2):
+        super().__init__()
+
+        self.modAttention = ModAttentionBlock(
+            proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate
+        )
+
+    def call(self, inp, pos):
+        """
+        Input shapes:
+          inp:  (n, p)
+          pos:  (n, 1)
+        Output shapes:
+          return: (n, p)
+        """
+        # Get variables for pos segment ids
+        pos_seg_ids, _ = tf.unique(pos)
+        n_pos_seg = tf.shape(pos_seg_ids)[0]
+
+        pos_out_arr = tf.TensorArray(
+            inp.dtype, size=n_pos_seg, infer_shape=False)
+        pos_out_seg = tf.TensorArray(
+            tf.int32, size=n_pos_seg, infer_shape=False)
+
+        def loop_cond(i, out, out_seg):
+            return i < n_pos_seg
+
+        def loop_body(i, out, out_seg):
+            curr_seg = pos_seg_ids[i]
+            curr_ind = tf.cast(tf.where(tf.equal(pos, curr_seg)),
+                               dtype=tf.int32)
+            curr_inp = tf.gather_nd(inp, curr_ind)  # (n_m, p)
+            
+            # Modality attention
+            attn = self.modAttention(curr_inp)  # (n_m, p)
+            
+            out_seg = out_seg.write(i, curr_ind)
+            out = out.write(i, attn)
+
+            return i+1, out, out_seg
+
+        i_end, pos_out_arr, pos_out_seg = tf.while_loop(
+            loop_cond,
+            loop_body,
+            loop_vars=(tf.constant(0), pos_out_arr, pos_out_seg)
+        )
+
+        # Concat batch outputs
+        out_arr = pos_out_arr.concat()
+        out_seg = pos_out_seg.concat()
+        out = tf.scatter_nd(out_seg, out_arr, tf.shape(inp))
+        
+        return out
+
+
+class MultiHeadAttentionBlock(layers.Layer):
+    """Multi head attention layer."""
+
+    def __init__(self, proj_dim=128, enc_dim=128, num_head=4,
+                 drop_rate=0.2, causal_mask=False, equivar=False,
+                 ax_attn=False):
+        super().__init__()
+
+        self.ax_attn = ax_attn
+        self.proj_dim = proj_dim
+        self.dense = layers.Dense(enc_dim)
+
+        if ax_attn:
+            self.mod_while_loop = ModWhileLoopBlock(
+                proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
+                drop_rate=drop_rate, causal_mask=causal_mask, equivar=equivar
+            )
+
+            self.seq_while_loop = SeqWhileLoopBlock(
+                proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate
+            )
+        else:
+            self.attention = SeqAttentionBlock(
+                proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
+                drop_rate=drop_rate, causal_mask=causal_mask, equivar=equivar
+            )
+
+    def call(self, inp, pos, mod, batch_seg):
+        """
+        Input shapes:
+          inp:  (n, d)
+          pos:  (n, 1)
+          mod:  (n, 1)
+        Output shapes:
+          return: (n, d)
+        """
         # Get variables for batch segment ids
         batch_seg_ids, _ = tf.unique(batch_seg)
         n_batch_seg = tf.shape(batch_seg_ids)[0]
+
+        # Get variables for mod segment ids
+        mod_seg_ids, _ = tf.unique(mod)
+        n_mod_seg = tf.shape(mod_seg_ids)[0]
+
+        # Get variables for pos segment ids
+        pos_seg_ids, _ = tf.unique(pos)
+        n_pos_seg = tf.shape(pos_seg_ids)[0]
 
         batch_out_arr = tf.TensorArray(
             inp.dtype, size=n_batch_seg, infer_shape=False)
@@ -384,20 +431,20 @@ class MultiHeadAttentionBlock(layers.Layer):
                 dtype=tf.int32
             )
 
-            curr_inp = tf.gather_nd(inp, curr_ind)
-            curr_pos = tf.gather_nd(pos, curr_ind)
-            curr_mod = tf.gather_nd(mod, curr_ind)
+            curr_inp = tf.gather_nd(inp, curr_ind) # (n_i, d)
+            curr_pos = tf.gather_nd(pos, curr_ind) # (n_i, 1)
+            curr_mod = tf.gather_nd(mod, curr_ind) # (n_i, 1)
             
             if self.ax_attn:
                 # Sequence attention
                 pos_attn = self.mod_while_loop(
                     curr_inp, curr_mod, curr_pos)  # (n, p)
                 # Modality attention
-                attn = self.pos_while_loop(
+                attn = self.seq_while_loop(
                     pos_attn, curr_pos)  # (n, p)
             else:
                 # Attention
-                attn = self.seqAttention(curr_inp, curr_pos)  # (n_t, p)
+                attn = self.attention(curr_inp, curr_pos)  # (n_t, p)
 
             out_seg = out_seg.write(i, curr_ind)
             out = out.write(i, attn)
@@ -412,21 +459,7 @@ class MultiHeadAttentionBlock(layers.Layer):
 
         # Concat batch outputs
         out = batch_out_arr.concat()
-        out.set_shape([None, self.proj_dim])
-
-        return out
-
-    def call(self, inp, pos, mod, batch_seg):
-        """
-        Input shapes:
-          inp:  (n, d)
-          pos:  (n, 1)
-          mod:  (n, 1)
-        Output shapes:
-          return: (n, d)
-        """
-        # Calculate sequential + modality attention
-        out = self.batch_while_loop(inp, pos, mod, batch_seg)  # (n, p)
+        out.set_shape([None, self.proj_dim])  # (n_t, p)
         
         # Linear projection to encoding dimension
         out = self.dense(out)  # (n, d)
