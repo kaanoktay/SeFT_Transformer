@@ -1,19 +1,31 @@
 """Main module for training models."""
 import os
 import sys
-import tensorflow as tf
+import time
 
-from training_utils import Preprocessing, parse_arguments
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+import tensorflow as tf
+tf.config.experimental.set_visible_devices([], "GPU")
+import tensorflow_datasets as tfds
+
+import jax
+import jax.numpy as jnp
+from jax import grad, jit, vmap, random, lax, device_put
+from jax.config import config
+config.enable_omnistaging() # Linen requires enabling omnistaging
+
+import flax
+from flax.core import freeze, unfreeze
+from flax import linen as nn
 
 import wandb
-from wandb.keras import WandbCallback
+import numpy as np
+from training_utils import Preprocessing, parse_arguments
 
-from tensorflow.python.util import deprecation
-deprecation._PRINT_DEPRECATION_WARNINGS = False
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.random.set_seed(83)
-print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
+print("GPUs Available:", 'yes'
+      if jax.default_backend()=='gpu' 
+      else 'no')
 
 def main():
     """Parse command line arguments and train model."""
@@ -41,6 +53,15 @@ def main():
 
     train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = \
         transformation._prepare_dataset_for_training()
+    
+    train_data = tfds.as_numpy(train_iter)
+    
+    for x, y in train_data:
+        x = device_put(np.squeeze(x[2], axis=-1))
+        print(x.shape)
+        print(type(x))
+        model = nn.Dense(features=32)
+        sys.exit()
     
     # Initialize the model
     
