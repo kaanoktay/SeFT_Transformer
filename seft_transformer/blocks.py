@@ -285,11 +285,11 @@ class ModWhileLoopBlock(layers.Layer):
             curr_seg = mod_seg_ids[i]
             curr_ind = tf.cast(tf.where(tf.equal(mod, curr_seg)),
                                dtype=tf.int32)
-            curr_inp = tf.gather_nd(inp, curr_ind)  # (n_t, d)
-            curr_pos = tf.gather_nd(pos, curr_ind)  # (n_t, 1)
+            curr_inp = tf.gather_nd(inp, curr_ind)  # (n_i, d)
+            curr_pos = tf.gather_nd(pos, curr_ind)  # (n_i, 1)
             
             # Sequence attention
-            attn = self.seqAttention(curr_inp, curr_pos)  # (n_t, p)
+            attn = self.seqAttention(curr_inp, curr_pos)  # (n_i, p)
 
             out_seg = out_seg.write(i, curr_ind)
             out = out.write(i, attn)
@@ -344,10 +344,10 @@ class SeqWhileLoopBlock(layers.Layer):
             curr_seg = pos_seg_ids[i]
             curr_ind = tf.cast(tf.where(tf.equal(pos, curr_seg)),
                                dtype=tf.int32)
-            curr_inp = tf.gather_nd(inp, curr_ind)  # (n_m, p)
+            curr_inp = tf.gather_nd(inp, curr_ind)  # (n_i, p)
             
             # Modality attention
-            attn = self.modAttention(curr_inp)  # (n_m, p)
+            attn = self.modAttention(curr_inp)  # (n_i, p)
             
             out_seg = out_seg.write(i, curr_ind)
             out = out.write(i, attn)
@@ -421,9 +421,11 @@ class MultiHeadAttentionBlock(layers.Layer):
         batch_out_seg = tf.TensorArray(
             tf.int32, size=n_batch_seg, infer_shape=False)
         
+    
         def loop_cond(i, out, out_seg):
-            return i < n_batch_seg
+            return tf.math.less(i, n_batch_seg)
 
+       
         def loop_body(i, out, out_seg):
             curr_seg = batch_seg_ids[i]
             curr_ind = tf.cast(
@@ -438,18 +440,18 @@ class MultiHeadAttentionBlock(layers.Layer):
             if self.ax_attn:
                 # Sequence attention
                 pos_attn = self.mod_while_loop(
-                    curr_inp, curr_mod, curr_pos)  # (n, p)
+                    curr_inp, curr_mod, curr_pos)  # (n_i, p)
                 # Modality attention
                 attn = self.seq_while_loop(
-                    pos_attn, curr_pos)  # (n, p)
+                    pos_attn, curr_pos)  # (n_i, p)
             else:
                 # Attention
-                attn = self.attention(curr_inp, curr_pos)  # (n_t, p)
+                attn = self.attention(curr_inp, curr_pos)  # (n_i, p)
 
             out_seg = out_seg.write(i, curr_ind)
             out = out.write(i, attn)
 
-            return i+1, out, out_seg
+            return tf.math.add(i, 1), out, out_seg
 
         i_end, batch_out_arr, batch_out_seg = tf.while_loop(
             loop_cond,
@@ -459,7 +461,7 @@ class MultiHeadAttentionBlock(layers.Layer):
 
         # Concat batch outputs
         out = batch_out_arr.concat()
-        out.set_shape([None, self.proj_dim])  # (n_t, p)
+        out.set_shape([None, self.proj_dim])  # (n, p)
         
         # Linear projection to encoding dimension
         out = self.dense(out)  # (n, d)
