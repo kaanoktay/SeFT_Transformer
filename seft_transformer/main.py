@@ -2,8 +2,9 @@
 import argparse
 import os
 import sys
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import tensorflow as tf
-import pdb
 from tensorflow import keras
 
 from .training_utils import Preprocessing
@@ -14,10 +15,6 @@ import wandb
 from wandb.keras import WandbCallback
 #wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
-from tensorflow.python.util import deprecation
-deprecation._PRINT_DEPRECATION_WARNINGS = False
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.random.set_seed(83)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
 

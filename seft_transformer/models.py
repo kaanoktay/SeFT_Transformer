@@ -5,8 +5,8 @@ from einops import rearrange
 import sys
 
 from .layers import (
-    AxialAttentionEncoderLayer,
-    ClassPredictionLayer,
+    MultiLayerAttention,
+    ClassPrediction,
     InputEmbedding
 )
 
@@ -18,7 +18,7 @@ class TimeSeriesTransformer(keras.Model):
                  pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.2, 
                  norm_type='reZero', dataset='physionet2012',
                  equivar=False, num_layers=1, no_time=False):
-        super(TimeSeriesTransformer, self).__init__()
+        super().__init__()
         if dataset=='physionet2019':
             self.causal_mask = True
         else:

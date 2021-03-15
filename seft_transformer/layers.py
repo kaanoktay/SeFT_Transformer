@@ -16,7 +16,7 @@ from .blocks import (
 class InputEmbedding(layers.Layer):
     def __init__(self, enc_dim=128, equivar=False, 
                  no_time=False):
-        super(InputEmbedding, self).__init__()
+        super().__init__()
 
         self.pos_encoding = PosEncodingBlock(
             enc_dim=enc_dim, equivar=equivar
@@ -65,12 +65,12 @@ class ReZero(layers.Layer):
         return x1 + self.re_weight * x2
 
 
-class AxialAttentionEncoderLayer(layers.Layer):
+class AxialAttentionEncoder(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, 
                  num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False,
                  equivar=False):
-        super(AxialAttentionEncoderLayer, self).__init__()
+        super().__init__()
 
         self.axAttention = AxialMultiHeadAttentionBlock(
             proj_dim=proj_dim, enc_dim=enc_dim,
@@ -119,11 +119,11 @@ class AxialAttentionEncoderLayer(layers.Layer):
         return attn_ffn
 
 
-class ClassPredictionLayer(layers.Layer):
+class ClassPrediction(layers.Layer):
     """Layer for predicting a class output from a series."""
 
     def __init__(self, ff_dim=32, drop_rate=0.2, causal_mask=False):
-        super(ClassPredictionLayer, self).__init__()
+        super().__init__()
         self.ff_dim = ff_dim
         self.dropout = layers.Dropout(drop_rate)
         self.causal_mask = causal_mask

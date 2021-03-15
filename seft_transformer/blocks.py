@@ -10,7 +10,7 @@ class PosEncodingBlock(layers.Layer):
     """Positional encodings layer."""
 
     def __init__(self, enc_dim=128, equivar=False):
-        super(PosEncodingBlock, self).__init__()
+        super().__init__()
         f = tf.math.exp(
             tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
             * -(tf.math.log(10000.0) / enc_dim)
@@ -54,7 +54,7 @@ class InpEncodingBlock(layers.Layer):
     """Input encodings layer."""
 
     def __init__(self, enc_dim=128):
-        super(InpEncodingBlock, self).__init__()
+        super().__init__()
         self.enc_dim = enc_dim
 
     def build(self, input_shape):
@@ -92,7 +92,7 @@ class ModEncodingBlock(layers.Layer):
     """Modality encodings layer."""
 
     def __init__(self, enc_dim=128):
-        super(ModEncodingBlock, self).__init__()
+        super().__init__()
         self.enc_dim = enc_dim
 
     def build(self, input_shape):
