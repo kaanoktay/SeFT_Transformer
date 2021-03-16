@@ -30,7 +30,7 @@ class InputEmbedding(layers.Layer):
         self.equivar = equivar
         self.no_time = no_time
 
-    def call(self, inp, time, mask):
+    def call(self, inp, time, mod):
         """
         Input shapes:
           inp:  (b, t, m, i)
@@ -41,6 +41,7 @@ class InputEmbedding(layers.Layer):
                   (b, t, m, d), None         else
         """
         pos_enc = self.pos_encoding(time)
+        sys.exit(0)
         inp_enc = self.inp_encoding(inp)
         mod_enc = self.mod_encoding(inp)
         if self.no_time:
@@ -65,7 +66,7 @@ class ReZero(layers.Layer):
         return x1 + self.re_weight * x2
 
 
-class AxialAttentionEncoder(layers.Layer):
+class AxialAttention(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, 
                  num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False,
@@ -117,6 +118,42 @@ class AxialAttentionEncoder(layers.Layer):
         attn_ffn = self.posFeedforward(attn)  # (b, t, m, d)
         attn_ffn = self.norm2(self.residual2(attn, attn_ffn))  # (b, t, m, d)
         return attn_ffn
+
+
+class MultiLayerAttention(layers.Layer):
+    def __init__(self, proj_dim=128, enc_dim=128,
+                 num_head=4, ff_dim=128, drop_rate=0.2, 
+                 norm_type="reZero", causal_mask=False,
+                 equivar=False, num_layers=1):
+        super().__init__()
+
+        self.layers = []
+
+        for i in range(num_layers):
+            self.layers.append(
+                AxialAttention(
+                    proj_dim=proj_dim, enc_dim=enc_dim,
+                    num_head=num_head, ff_dim=ff_dim, 
+                    drop_rate=drop_rate, norm_type=norm_type, 
+                    causal_mask=causal_mask, equivar=equivar
+                )
+            )
+
+    def call(self, inp, pos, mask):
+        """
+        Input shapes:
+          inp:  (b, t, m, d)
+          pos:  (b, t, t, d)
+          mask: (b, t, m)
+        Output shapes:
+          return: (b, t, m, d)
+        """
+        attn = inp
+        
+        for layer in self.layers:
+            attn = layer(attn, pos, mask)
+
+        return attn
 
 
 class ClassPrediction(layers.Layer):

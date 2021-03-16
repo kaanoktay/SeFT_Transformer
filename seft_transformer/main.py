@@ -28,10 +28,10 @@ def parse_arguments():
                         metavar="200", help='number of epochs')
     parser.add_argument('--init_lr', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
+    parser.add_argument('--lr_warmup_steps', type=float, default=1e3,
                         metavar="2e3", help='learning rate warmup steps')
-    parser.add_argument('--dropout_rate', type=float, default=0.1,
-                        metavar="0.1", help='dropout rate')
+    parser.add_argument('--dropout_rate', type=float, default=0.2,
+                        metavar="0.2", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
                         metavar="reZero", help='normalization type')
     parser.add_argument('--dataset', type=str, default='physionet2012',
@@ -112,6 +112,8 @@ def main():
                  keras.metrics.AUC(curve='PR', name='auprc'),
                  keras.metrics.AUC(curve='ROC', name='auroc')]
     )
+
+    model.run_eagerly = True
 
     # Callback for logging the learning rate for inspection
     lr_logger_callback = LearningRateLogger()

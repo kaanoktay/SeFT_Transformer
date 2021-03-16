@@ -26,12 +26,14 @@ class TimeSeriesTransformer(keras.Model):
         self.input_embedding = InputEmbedding(
             enc_dim=enc_dim, equivar=equivar, no_time=no_time
         )
-        self.transformer_encoder = AxialAttentionEncoderLayer(
-            proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
-            ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type,
-            causal_mask=self.causal_mask, equivar=equivar
+        self.transformer_encoder = MultiLayerAttention(
+            proj_dim=proj_dim, enc_dim=enc_dim, 
+            num_head=num_head, ff_dim=pos_ff_dim, 
+            drop_rate=drop_rate, norm_type=norm_type,
+            causal_mask=self.causal_mask, equivar=equivar, 
+            num_layers=num_layers
         )
-        self.class_prediction = ClassPredictionLayer(
+        self.class_prediction = ClassPrediction(
             ff_dim=pred_ff_dim, drop_rate=drop_rate,
             causal_mask=self.causal_mask
         )
@@ -90,7 +92,7 @@ class TimeSeriesTransformer(keras.Model):
             self.compiled_loss(y, y_pred, sample_weight)
         else:
             # Forward pass
-            y_pred = self(x, training=True)
+            y_pred = self(x, training=False)
             # Compute the loss value
             self.compiled_loss(y, y_pred)
 
@@ -115,12 +117,23 @@ class TimeSeriesTransformer(keras.Model):
         inp = inputs[2]  # (b, t, m)
         mask = inputs[3]  # (b, t, m)
         count = inputs[4]  # (b, 1)
-        # Expand input dimensions if necessary
-        if len(inp.shape) == 3:
-            inp = rearrange(inp, 'b t m -> b t m 1')
+        mod = tf.broadcast_to(
+            tf.range(tf.shape(mask)[-1]),
+            tf.shape(mask))  # (b, t, m)
+        # Expand input dimensions
+        inp = tf.expand_dims(inp, -1)
+        time = tf.expand_dims(time, -1)
+        mod = tf.expand_dims(mod, -1)
+        # Calculate ragged tensors
+        inp = tf.ragged.boolean_mask(
+            inp, mask)
+        time = tf.ragged.boolean_mask(
+            time, tf.sequence_mask(count))
+        mod = tf.ragged.boolean_mask(
+            mod, mask)
         # Encode inputs
         inp_enc, pos_enc = self.input_embedding(
-            inp, time, mask)
+            inp, time, mod)
         # Calculate attention
         attn = self.transformer_encoder(
             inp_enc, pos_enc, mask)
