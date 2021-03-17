@@ -85,36 +85,6 @@ class TimeSeriesTransformer(keras.Model):
         # Return a dict mapping metric names to current value
         return {m.name: m.result() for m in self.metrics}
     
-    def test_step(self, data):
-        x, y = data
-        sample_weight = None
-
-        if self.causal_mask:
-            # Forward pass
-            y_pred, count = self(x, training=False)
-            # Calculate the sample weight
-            mask = tf.cast(
-                tf.sequence_mask(count),
-                dtype='float32'
-            )
-            sample_weight = mask / \
-                tf.reduce_sum(tf.cast(count, dtype='float32'))
-            # Compute the loss value
-            self.compiled_loss(y, y_pred, sample_weight)
-        else:
-            # Forward pass
-            y_pred = self(x, training=False)
-            # Compute the loss value
-            self.compiled_loss(y, y_pred)
-
-        # Update metrics
-        if self.causal_mask:
-            self.compiled_metrics.update_state(y, y_pred, sample_weight)
-        else:
-            self.compiled_metrics.update_state(y, y_pred)
-        # Return a dict mapping metric names to current value
-        return {m.name: m.result() for m in self.metrics}
-
     def call(self, inputs):
         """Apply model to data.
 

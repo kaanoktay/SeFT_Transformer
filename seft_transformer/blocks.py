@@ -408,23 +408,13 @@ class MultiHeadAttentionBlock(layers.Layer):
         batch_seg_ids, _ = tf.unique(batch_seg)
         n_batch_seg = tf.shape(batch_seg_ids)[0]
 
-        # Get variables for mod segment ids
-        mod_seg_ids, _ = tf.unique(mod)
-        n_mod_seg = tf.shape(mod_seg_ids)[0]
-
-        # Get variables for pos segment ids
-        pos_seg_ids, _ = tf.unique(pos)
-        n_pos_seg = tf.shape(pos_seg_ids)[0]
-
         batch_out_arr = tf.TensorArray(
             inp.dtype, size=n_batch_seg, infer_shape=False)
         batch_out_seg = tf.TensorArray(
             tf.int32, size=n_batch_seg, infer_shape=False)
-        
     
         def loop_cond(i, out, out_seg):
             return tf.math.less(i, n_batch_seg)
-
        
         def loop_body(i, out, out_seg):
             curr_seg = batch_seg_ids[i]
@@ -456,7 +446,8 @@ class MultiHeadAttentionBlock(layers.Layer):
         i_end, batch_out_arr, batch_out_seg = tf.while_loop(
             loop_cond,
             loop_body,
-            loop_vars=(tf.constant(0), batch_out_arr, batch_out_seg)
+            loop_vars=(tf.constant(0), batch_out_arr, batch_out_seg),
+            parallel_iterations=1000
         )
 
         # Concat batch outputs

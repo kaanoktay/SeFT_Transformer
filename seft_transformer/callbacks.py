@@ -35,6 +35,7 @@ class LearningRateLogger(tf.keras.callbacks.Callback):
             step=epoch
         )
 
+
 class BatchPrinter(tf.keras.callbacks.Callback):
     def __init__(self):
         super(BatchPrinter, self).__init__()
