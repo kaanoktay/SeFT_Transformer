@@ -9,7 +9,7 @@ from .blocks import (
     PosEncodingBlock,
     InpEncodingBlock,
     ModEncodingBlock,
-    PosFeedforwardBlock,
+    PosFeedforwardBlock
 )
 
 
@@ -33,9 +33,9 @@ class InputEmbedding(layers.Layer):
     def call(self, inp, time, mod):
         """
         Input shapes:
-          inp:  (b, t, m, i)
-          time: (b, t)
-          mask: (b, t, m)
+          inp:  (b, t, m, 1)
+          time: (b, t, 1)
+          mod:  (b, t, m, 1)
         Output shapes:
           return: (b, t, m, d), (b, t, t, d) if equivar
                   (b, t, m, d), None         else

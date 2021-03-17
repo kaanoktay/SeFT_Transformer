@@ -21,7 +21,7 @@ class PosEncodingBlock(layers.Layer):
     def call(self, time):
         """
         Input shapes:
-          time: (b, t)
+          time: (b, t, 1)
         Output shapes:
           return: (b, t, t, d) if equivar
                   (b, t, 1, d) else
@@ -40,13 +40,22 @@ class PosEncodingBlock(layers.Layer):
             return pos_enc  # (b, t, t, d)
         else:
             # Calculate sine and cosine components
-            angles = tf.einsum(
-                'bt,f->btf', time, self.f)  # (b, t, d/2)
-            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
-            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
+            angles = tf.math.multiply(time, self.f)
+            sin_enc = tf.math.sin(angles)  # (b, t, d/2)
+            cos_enc = tf.math.cos(angles)  # (b, t, d/2)
             # Construct positional encodings
+            pos_enc = tf.stack([sin_enc, cos_enc], axis=-1)
+            print(angles.shape)
+            print(pos_enc.shape)
+            
+            sys.exit(0)
+            pos_enc = tf.reshape(
+                pos_enc,
+                [shapes[0], None, shapes[2]*shapes[3]]
+            )
             pos_enc = rearrange(
                 [sin_enc, cos_enc],  'z b t k -> b t 1 (k z)')
+        
             return pos_enc  # (b, t, 1, d)
 
 

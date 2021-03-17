@@ -121,16 +121,21 @@ class TimeSeriesTransformer(keras.Model):
             tf.range(tf.shape(mask)[-1]),
             tf.shape(mask))  # (b, t, m)
         # Expand input dimensions
-        inp = tf.expand_dims(inp, -1)
-        time = tf.expand_dims(time, -1)
-        mod = tf.expand_dims(mod, -1)
+        #time = tf.expand_dims(time, -1)  # (b, t, 1)
+        #inp = tf.expand_dims(inp, -1)  # (b, t, m, 1)
+        #mod = tf.expand_dims(mod, -1)  # (b, t, m, 1)
         # Calculate ragged tensors
-        inp = tf.ragged.boolean_mask(
-            inp, mask)
         time = tf.ragged.boolean_mask(
-            time, tf.sequence_mask(count))
+            time, tf.sequence_mask(count))  # (b, t, 1)
+        inp = tf.ragged.boolean_mask(
+            inp, mask)  # (b, t, m, 1)
         mod = tf.ragged.boolean_mask(
-            mod, mask)
+            mod, mask)  # (b, t, m, 1)
+        print(time.shape)
+        print(inp.shape)
+        print(inp.row_lengths)
+        print(mod.shape)
+        sys.exit()
         # Encode inputs
         inp_enc, pos_enc = self.input_embedding(
             inp, time, mod)
