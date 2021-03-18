@@ -1,7 +1,8 @@
 einops<0.4.0,>=0.3.0
-medical-ts-datasets
-numpy<2.0.0,>=1.18.3
-opt-einsum==3.3.0
+medical_ts_datasets@ git+https://github.com/ExpectationMax/medical_ts_datasets.git@master
+numpy<2.0.0,>=1.18.0
 scikit-learn<0.23.0,>=0.22.2
-tensorflow<3.0.0,>=2.3.0
+tensorflow-datasets<4.0.0,>=2.0.0
+tensorflow<2.4.0,>=2.3.0
 tqdm<5.0.0,>=4.45.0
+wandb<0.11.0,>=0.10.19

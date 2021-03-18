@@ -13,7 +13,7 @@ from .callbacks import WarmUpScheduler, LearningRateLogger
 
 import wandb
 from wandb.keras import WandbCallback
-#wandb.init(project="master_thesis_kaan", entity="borgwardt")
+wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
 tf.random.set_seed(83)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
@@ -28,8 +28,8 @@ def parse_arguments():
                         metavar="200", help='number of epochs')
     parser.add_argument('--init_lr', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
-                        metavar="2e3", help='learning rate warmup steps')
+    parser.add_argument('--lr_warmup_steps', type=float, default=100,
+                        metavar="100", help='learning rate warmup steps')
     parser.add_argument('--dropout_rate', type=float, default=0.1,
                         metavar="0.1", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
@@ -53,7 +53,7 @@ def main():
     args = parse_arguments()
 
     # Add hyperparameters to wandb config
-    #wandb.config.update(args)
+    wandb.config.update(args)
 
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
@@ -151,11 +151,9 @@ def main():
         callbacks=[lr_schedule_callback,
                    lr_warmup_callback,
                    lr_logger_callback,
-                   #WandbCallback(),
+                   WandbCallback(),
                    early_stopping_callback]
     )
-
-    #model.save(os.path.join(wandb.run.dir, "model.h5"))
 
     print("\n------- Test -------")
     # Fit the model to the input data

@@ -1,2 +1,0 @@
-from .physionet_2012_test import Physionet2012Test
-from .physionet_2019_test import Physionet2019Test

@@ -1,5 +1,6 @@
 """Implementation of Layers used by Keras models."""
 from tensorflow.keras import layers
+from tensorflow import keras
 import tensorflow as tf
 from einops import rearrange, reduce
 import sys
@@ -117,6 +118,64 @@ class AxialAttentionEncoder(layers.Layer):
         attn_ffn = self.posFeedforward(attn)  # (b, t, m, d)
         attn_ffn = self.norm2(self.residual2(attn, attn_ffn))  # (b, t, m, d)
         return attn_ffn
+
+
+class MultiLayerAttention(layers.Layer):
+    def __init__(self, proj_dim=128, enc_dim=128,
+                 num_head=4, ff_dim=128, drop_rate=0.2, 
+                 norm_type="reZero", causal_mask=False,
+                 equivar=False, num_layers=1):
+        super().__init__()
+
+        self.num_layers = num_layers
+
+        self.layer1 = AxialAttentionEncoder(
+                          proj_dim=proj_dim, enc_dim=enc_dim,
+                          num_head=num_head, ff_dim=ff_dim, 
+                          drop_rate=drop_rate, norm_type=norm_type, 
+                          causal_mask=causal_mask, equivar=equivar)
+
+        if num_layers >= 2: 
+            self.layer2 = AxialAttentionEncoder(
+                            proj_dim=proj_dim, enc_dim=enc_dim,
+                            num_head=num_head, ff_dim=ff_dim, 
+                            drop_rate=drop_rate, norm_type=norm_type, 
+                            causal_mask=causal_mask, equivar=equivar)
+        if num_layers >= 3: 
+            self.layer3 = AxialAttentionEncoder(
+                            proj_dim=proj_dim, enc_dim=enc_dim,
+                            num_head=num_head, ff_dim=ff_dim, 
+                            drop_rate=drop_rate, norm_type=norm_type, 
+                            causal_mask=causal_mask, equivar=equivar)
+        
+        if num_layers >= 4: 
+            self.layer4 = AxialAttentionEncoder(
+                            proj_dim=proj_dim, enc_dim=enc_dim,
+                            num_head=num_head, ff_dim=ff_dim, 
+                            drop_rate=drop_rate, norm_type=norm_type, 
+                            causal_mask=causal_mask, equivar=equivar)
+        
+
+    def call(self, inp, pos, mask):
+        """
+        Input shapes:
+          inp:  (b, t, m, d)
+          pos:  (b, t, t, d)
+          mask: (b, t, m)
+        Output shapes:
+          return: (b, t, m, d)
+        """
+        
+        attn = self.layer1(inp, pos, mask)
+
+        if self.num_layers >= 2:
+            attn = self.layer2(attn, pos, mask)
+        if self.num_layers >= 3:
+            attn = self.layer3(attn, pos, mask)
+        if self.num_layers >= 4:
+            attn = self.layer4(attn, pos, mask)
+
+        return attn
 
 
 class ClassPrediction(layers.Layer):

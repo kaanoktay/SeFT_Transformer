@@ -2,9 +2,9 @@ README.md
 setup.py
 seft_transformer/__init__.py
 seft_transformer/blocks.py
+seft_transformer/callbacks.py
 seft_transformer/layers.py
 seft_transformer/main.py
-seft_transformer/misc.py
 seft_transformer/models.py
 seft_transformer/normalization.py
 seft_transformer/training_utils.py

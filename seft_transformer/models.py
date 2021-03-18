@@ -26,12 +26,14 @@ class TimeSeriesTransformer(keras.Model):
         self.input_embedding = InputEmbedding(
             enc_dim=enc_dim, equivar=equivar, no_time=no_time
         )
-        self.transformer_encoder = AxialAttentionEncoderLayer(
-            proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
-            ff_dim=pos_ff_dim, drop_rate=drop_rate, norm_type=norm_type,
-            causal_mask=self.causal_mask, equivar=equivar
+        self.transformer_encoder = MultiLayerAttention(
+            proj_dim=proj_dim, enc_dim=enc_dim, 
+            num_head=num_head, ff_dim=pos_ff_dim, 
+            drop_rate=drop_rate, norm_type=norm_type,
+            causal_mask=self.causal_mask, equivar=equivar,
+            num_layers=num_layers
         )
-        self.class_prediction = ClassPredictionLayer(
+        self.class_prediction = ClassPrediction(
             ff_dim=pred_ff_dim, drop_rate=drop_rate,
             causal_mask=self.causal_mask
         )
@@ -90,7 +92,7 @@ class TimeSeriesTransformer(keras.Model):
             self.compiled_loss(y, y_pred, sample_weight)
         else:
             # Forward pass
-            y_pred = self(x, training=True)
+            y_pred = self(x, training=False)
             # Compute the loss value
             self.compiled_loss(y, y_pred)
 
