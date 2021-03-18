@@ -49,42 +49,6 @@ class TimeSeriesTransformer(keras.Model):
         self.to_segments = PaddedToSegments()
         self.ax_attn = ax_attn
     
-    def train_step(self, data):
-        x, y = data
-        sample_weight = None
-
-        with tf.GradientTape() as tape:
-            if self.causal_mask:
-                # Forward pass
-                y_pred, count = self(x, training=True)
-                # Calculate the sample weight
-                mask = tf.cast(
-                    tf.sequence_mask(count),
-                    dtype='float32'
-                )
-                sample_weight = mask / \
-                    tf.reduce_sum(tf.cast(count, dtype='float32'))
-                # Compute the loss value
-                loss = self.compiled_loss(y, y_pred, sample_weight)
-            else:
-                # Forward pass
-                y_pred = self(x, training=True)
-                # Compute the loss value
-                loss = self.compiled_loss(y, y_pred)
-        
-        # Compute gradients
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
-        # Update weights
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        # Update metrics
-        if self.causal_mask:
-            self.compiled_metrics.update_state(y, y_pred, sample_weight)
-        else:
-            self.compiled_metrics.update_state(y, y_pred)
-        # Return a dict mapping metric names to current value
-        return {m.name: m.result() for m in self.metrics}
-    
     def call(self, inputs):
         """Apply model to data.
 
@@ -97,7 +61,7 @@ class TimeSeriesTransformer(keras.Model):
         time = tf.squeeze(inputs[1], axis=-1)  # (b, t)
         inp = tf.squeeze(inputs[2], axis=-1)   # (b, t)
         mod = inputs[3]  # (b, t)
-        count = inputs[4]  # (b)
+        count = tf.squeeze(inputs[4], axis=-1)  # (b)
         mask = tf.sequence_mask(count)  # (b, t)
 
         # Get input, time and modality sets
@@ -118,7 +82,4 @@ class TimeSeriesTransformer(keras.Model):
         # Make prediction
         pred = self.class_prediction(attn, batch_seg)  # (b, 1)
 
-        if self.causal_mask:
-            return pred, count
-        else:
-            return pred
+        return pred
