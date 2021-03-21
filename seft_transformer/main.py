@@ -4,8 +4,8 @@ import os
 import sys
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['WANDB_SILENT'] = 'true'
 import tensorflow as tf
-import pdb
 from tensorflow import keras
 
 from .training_utils import Preprocessing
@@ -15,9 +15,6 @@ from .callbacks import WarmUpScheduler, LearningRateLogger
 import wandb
 from wandb.keras import WandbCallback
 wandb.init(project="master_thesis_kaan", entity="borgwardt")
-
-from tensorflow.python.util import deprecation
-deprecation._PRINT_DEPRECATION_WARNINGS = False
 
 tf.random.set_seed(83)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
@@ -30,22 +27,22 @@ def parse_arguments():
                         metavar="16", help='batch size')
     parser.add_argument('--num_epochs', type=int, default=200,
                         metavar="200", help='number of epochs')
-    parser.add_argument('--init_lr', type=float, default=1e-4,
-                        metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=1e4,
-                        metavar="1e4", help='learning rate warmup steps')
-    parser.add_argument('--dropout_rate', type=float, default=0.2,
-                        metavar="0.2", help='dropout rate')
+    parser.add_argument('--init_lr', type=float, default=2e-4,
+                        metavar="2e-4", help='initial learning rate')
+    parser.add_argument('--lr_warmup_steps', type=float, default=5e2,
+                        metavar="5e2", help='learning rate warmup steps')
+    parser.add_argument('--dropout_rate', type=float, default=0.3,
+                        metavar="0.3", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
                         metavar="reZero", help='normalization type')
     parser.add_argument('--dataset', type=str, default='physionet2012',
                         metavar='physionet2012', help='dataset name')
     parser.add_argument('--num_layers', type=int, default='1',
                         metavar='1', help='number of layers')
-    parser.add_argument('--proj_dim', type=int, default='32',
-                        metavar='32', help='projection dimension')
-    parser.add_argument('--num_heads', type=int, default='2',
-                        metavar='2', help='number of heads')
+    parser.add_argument('--proj_dim', type=int, default='128',
+                        metavar='128', help='projection dimension')
+    parser.add_argument('--num_heads', type=int, default='4',
+                        metavar='4', help='number of heads')
     parser.add_argument('--equivariance', default=False, 
                         action='store_true')
     parser.add_argument('--no_time', default=False,
@@ -146,7 +143,7 @@ def main():
     early_stopping_callback = keras.callbacks.EarlyStopping(
         monitor='val_loss',
         mode='min',
-        patience=14,
+        patience=12,
         restore_best_weights=True
     )
 

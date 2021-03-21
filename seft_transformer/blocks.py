@@ -385,7 +385,6 @@ class MultiHeadAttentionBlock(layers.Layer):
                 proj_dim=proj_dim, enc_dim=enc_dim, num_head=num_head,
                 drop_rate=drop_rate, causal_mask=causal_mask, equivar=equivar
             )
-
             self.seq_while_loop = SeqWhileLoopBlock(
                 proj_dim=proj_dim, num_head=num_head, drop_rate=drop_rate
             )

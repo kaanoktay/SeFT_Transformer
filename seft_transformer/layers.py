@@ -67,7 +67,7 @@ class ReZero(layers.Layer):
         return x1 + self.re_weight * x2
 
 
-class Attention(layers.Layer):
+class AttentionEncoder(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, 
                  num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False,
@@ -136,18 +136,38 @@ class MultiLayerAttention(layers.Layer):
                  equivar=False, num_layers=1, ax_attn=False):
         super().__init__()
 
-        self.layers = []
+        self.num_layers = num_layers
 
-        for i in range(num_layers):
-            self.layers.append(
-                Attention(
-                    proj_dim=proj_dim, enc_dim=enc_dim,
-                    num_head=num_head, ff_dim=ff_dim, 
-                    drop_rate=drop_rate, norm_type=norm_type, 
-                    causal_mask=causal_mask, equivar=equivar,
-                    ax_attn=ax_attn
-                )
-            )
+        self.layer1 = AttentionEncoder(
+                          proj_dim=proj_dim, enc_dim=enc_dim,
+                          num_head=num_head, ff_dim=ff_dim, 
+                          drop_rate=drop_rate, norm_type=norm_type, 
+                          causal_mask=causal_mask, equivar=equivar,
+                          ax_attn=ax_attn)
+
+        if num_layers >= 2: 
+            self.layer2 = AttentionEncoder(
+                              proj_dim=proj_dim, enc_dim=enc_dim,
+                              num_head=num_head, ff_dim=ff_dim, 
+                              drop_rate=drop_rate, norm_type=norm_type, 
+                              causal_mask=causal_mask, equivar=equivar,
+                              ax_attn=ax_attn)
+                          
+        if num_layers >= 3: 
+            self.layer3 = AttentionEncoder(
+                              proj_dim=proj_dim, enc_dim=enc_dim,
+                              num_head=num_head, ff_dim=ff_dim, 
+                              drop_rate=drop_rate, norm_type=norm_type, 
+                              causal_mask=causal_mask, equivar=equivar,
+                              ax_attn=ax_attn)
+        
+        if num_layers >= 4: 
+            self.layer4 = AttentionEncoder(
+                              proj_dim=proj_dim, enc_dim=enc_dim,
+                              num_head=num_head, ff_dim=ff_dim, 
+                              drop_rate=drop_rate, norm_type=norm_type, 
+                              causal_mask=causal_mask, equivar=equivar,
+                              ax_attn=ax_attn)
 
     def call(self, inp, pos, mod, batch_seg):
         """
@@ -158,10 +178,14 @@ class MultiLayerAttention(layers.Layer):
         Output shapes:
           return: (n, d)
         """
-        attn = inp
-        
-        for layer in self.layers:
-            attn = layer(attn, pos, mod, batch_seg)
+        attn = self.layer1(inp, pos, mod, batch_seg)
+
+        if self.num_layers >= 2:
+            attn = self.layer2(attn, pos, mod, batch_seg)
+        if self.num_layers >= 3:
+            attn = self.layer3(attn, pos, mod, batch_seg)
+        if self.num_layers >= 4:
+            attn = self.layer4(attn, pos, mod, batch_seg)
 
         return attn
 
