@@ -4,12 +4,17 @@ import os
 import sys
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['WANDB_SILENT'] = 'true'
 import tensorflow as tf
 from tensorflow import keras
 
 from .training_utils import Preprocessing
 from .models import TimeSeriesTransformer
-from .callbacks import WarmUpScheduler, LearningRateLogger
+from .callbacks import (
+    WarmUpScheduler,
+    LearningRateLogger,
+    TimeEncWeightLogger
+)
 
 import wandb
 from wandb.keras import WandbCallback
@@ -28,10 +33,10 @@ def parse_arguments():
                         metavar="200", help='number of epochs')
     parser.add_argument('--init_lr', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=100,
-                        metavar="100", help='learning rate warmup steps')
-    parser.add_argument('--dropout_rate', type=float, default=0.1,
-                        metavar="0.1", help='dropout rate')
+    parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
+                        metavar="2e3", help='learning rate warmup steps')
+    parser.add_argument('--dropout_rate', type=float, default=0.2,
+                        metavar="0.2", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
                         metavar="reZero", help='normalization type')
     parser.add_argument('--dataset', type=str, default='physionet2012',
@@ -116,6 +121,9 @@ def main():
     # Callback for logging the learning rate for inspection
     lr_logger_callback = LearningRateLogger()
 
+    # Callback for logging the weight of time encoding
+    w_t_logger_callback = TimeEncWeightLogger()
+
     # Callback for warmup scheduler
     lr_warmup_callback = WarmUpScheduler(
         final_lr=init_lr,
@@ -151,6 +159,7 @@ def main():
         callbacks=[lr_schedule_callback,
                    lr_warmup_callback,
                    lr_logger_callback,
+                   w_t_logger_callback,
                    WandbCallback(),
                    early_stopping_callback]
     )

@@ -30,6 +30,9 @@ class InputEmbedding(layers.Layer):
         )
         self.equivar = equivar
         self.no_time = no_time
+        
+        if not no_time:
+            self.w_t = tf.Variable(0.01, trainable=True)
 
     def call(self, inp, time, mask):
         """
@@ -44,13 +47,14 @@ class InputEmbedding(layers.Layer):
         pos_enc = self.pos_encoding(time)
         inp_enc = self.inp_encoding(inp)
         mod_enc = self.mod_encoding(inp)
+        
         if self.no_time:
             return inp_enc + mod_enc, None
         else:
             if self.equivar:
-                return inp_enc + mod_enc, pos_enc
+                return inp_enc + mod_enc, self.w_t * pos_enc
             else:
-                return inp_enc + mod_enc + pos_enc, None
+                return inp_enc + mod_enc + self.w_t * pos_enc, None
 
 
 class ReZero(layers.Layer):

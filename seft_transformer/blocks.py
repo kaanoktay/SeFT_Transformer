@@ -15,7 +15,7 @@ class PosEncodingBlock(layers.Layer):
             tf.range(start=0, limit=enc_dim, delta=2, dtype="float32")
             * -(tf.math.log(10000.0) / enc_dim)
         )
-        self.f = tf.Variable(f, trainable=False)
+        self.f = tf.Variable(f, trainable=True)
         self.equivar = equivar
 
     def call(self, time):
@@ -187,30 +187,6 @@ class SeqAttentionBlock(layers.Layer):
                     shape=(num_mod, self.proj_dim), dtype="float32"),
                 trainable=True
             )
-            """
-            ## Transformer XL approach
-            self.W_k_r = tf.Variable(
-                initial_value=w_init(
-                    shape=(1, num_mod, 1, 1, self.proj_dim, input_dim),
-                    dtype='float32'
-                ),
-                trainable=True
-            )
-            self.u = tf.Variable(
-                initial_value=b_init(
-                    shape=(1, num_mod, self.num_head, self.embed_dim),
-                    dtype='float32'
-                ),
-                trainable=True
-            )
-            self.v = tf.Variable(
-                initial_value=b_init(
-                    shape=(1, num_mod, self.num_head, 1, self.embed_dim),
-                    dtype='float32'
-                ),
-                trainable=True
-            )
-            """
 
     def call(self, inp, pos, mask):
         """
@@ -245,19 +221,7 @@ class SeqAttentionBlock(layers.Layer):
             t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
                           h=self.num_head)  # (b, 1, h, t, t, e)
             score = score + tf.linalg.matvec(t, q_t)/(self.embed_dim**0.5)
-            """Transformers XL approach
-            k_r = tf.linalg.matvec(self.W_k_r, pos[:, None, ...])
-            k_r = rearrange(
-                k_r, 'b m t1 t2 (h e) -> b m h t1 t2 e', h=self.num_head)
-            score += (
-                # Add them instead of doing separate steps, this is
-                # mathematically equivalent but saves the computation of an
-                # additional NxN matrix.
-                tf.linalg.matvec(k_r, q + self.v)
-                # Broadcast to all t2 values
-                + tf.linalg.matvec(k, self.u)[..., None]
-            ) / (self.embed_dim**0.5)
-            """
+
         # Apply mask and causal mask if needed
         causal_mask = None
         if self.causal_mask:
@@ -266,9 +230,11 @@ class SeqAttentionBlock(layers.Layer):
                 tf.ones([t, t], dtype='bool')
             ).to_dense()  # (t, t)
             score = tf.where(causal_mask, score, -np.inf)
+
         if mask is not None:
             mask = rearrange(mask, 'b t m -> b m 1 1 t')
             score = tf.where(mask, score, -np.inf)
+        
         # Calculate attention weights
         weight = tf.nn.softmax(score)  # (b, m, h, t, t)
         if mask is not None:

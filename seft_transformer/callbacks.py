@@ -34,6 +34,17 @@ class LearningRateLogger(tf.keras.callbacks.Callback):
             data=self.model.optimizer.lr, 
             step=epoch
         )
+        
+class TimeEncWeightLogger(tf.keras.callbacks.Callback):
+    def __init__(self):
+        super().__init__()
+    
+    def on_epoch_end(self, epoch, logs=None):
+        tf.summary.scalar(
+            name='time enc weight',
+            data=self.model.input_embedding.w_t,
+            step=epoch
+        )
 
 class BatchPrinter(tf.keras.callbacks.Callback):
     def __init__(self):
