@@ -31,8 +31,8 @@ def parse_arguments():
                         metavar="2e-4", help='initial learning rate')
     parser.add_argument('--lr_warmup_steps', type=float, default=5e2,
                         metavar="5e2", help='learning rate warmup steps')
-    parser.add_argument('--dropout_rate', type=float, default=0.3,
-                        metavar="0.3", help='dropout rate')
+    parser.add_argument('--dropout_rate', type=float, default=0.2,
+                        metavar="0.2", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
                         metavar="reZero", help='normalization type')
     parser.add_argument('--dataset', type=str, default='physionet2012',
