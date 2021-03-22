@@ -12,13 +12,12 @@ from .training_utils import Preprocessing
 from .models import TimeSeriesTransformer
 from .callbacks import (
     WarmUpScheduler,
-    LearningRateLogger,
-    TimeEncWeightLogger
+    LearningRateLogger
 )
 
 import wandb
 from wandb.keras import WandbCallback
-wandb.init(project="master_thesis_kaan", entity="borgwardt")
+#wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
 tf.random.set_seed(83)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
@@ -33,8 +32,8 @@ def parse_arguments():
                         metavar="200", help='number of epochs')
     parser.add_argument('--init_lr', type=float, default=1e-4,
                         metavar="1e-4", help='initial learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=2e3,
-                        metavar="2e3", help='learning rate warmup steps')
+    parser.add_argument('--lr_warmup_steps', type=float, default=1e3,
+                        metavar="1e3", help='learning rate warmup steps')
     parser.add_argument('--dropout_rate', type=float, default=0.2,
                         metavar="0.2", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
@@ -43,13 +42,17 @@ def parse_arguments():
                         metavar='physionet2012', help='dataset name')
     parser.add_argument('--num_layers', type=int, default='1',
                         metavar='1', help='number of layers')
-    parser.add_argument('--proj_dim', type=int, default='32',
-                        metavar='32', help='projection dimension')
+    parser.add_argument('--proj_dim', type=int, default='64',
+                        metavar='64', help='projection dimension')
     parser.add_argument('--num_heads', type=int, default='2',
                         metavar='2', help='number of heads')
     parser.add_argument('--equivariance', default=False, 
                         action='store_true')
     parser.add_argument('--no_time', default=False,
+                        action='store_true')
+    parser.add_argument('--uni_mod', default=False,
+                        action='store_true')
+    parser.add_argument('--train_time_enc', default=False,
                         action='store_true')
     return parser.parse_args()
 
@@ -58,7 +61,7 @@ def main():
     args = parse_arguments()
 
     # Add hyperparameters to wandb config
-    wandb.config.update(args)
+    #wandb.config.update(args)
 
     # Hyperparameters
     batch_size = args.batch_size  # Default: 16
@@ -73,6 +76,8 @@ def main():
     num_heads = args.num_heads  # Default: 2
     equivariance = args.equivariance  # Default: False
     no_time = args.no_time  # Default: False
+    uni_mod = args.uni_mod  # Default: False
+    train_time_enc = args.train_time_enc  # Default: False
 
     # Load data
     transformation = Preprocessing(
@@ -88,7 +93,8 @@ def main():
         pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
         norm_type=norm_type, dataset=dataset,
         equivar=equivariance, num_layers=num_layers,
-        no_time=no_time
+        no_time=no_time, uni_mod=uni_mod,
+        train_time_enc=train_time_enc
     )
 
     # Optimizer function
@@ -122,7 +128,7 @@ def main():
     lr_logger_callback = LearningRateLogger()
 
     # Callback for logging the weight of time encoding
-    w_t_logger_callback = TimeEncWeightLogger()
+    #w_t_logger_callback = TimeEncWeightLogger()
 
     # Callback for warmup scheduler
     lr_warmup_callback = WarmUpScheduler(
@@ -159,8 +165,8 @@ def main():
         callbacks=[lr_schedule_callback,
                    lr_warmup_callback,
                    lr_logger_callback,
-                   w_t_logger_callback,
-                   WandbCallback(),
+                   #w_t_logger_callback,
+                   #WandbCallback(),
                    early_stopping_callback]
     )
 

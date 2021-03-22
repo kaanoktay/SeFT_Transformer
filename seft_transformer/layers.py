@@ -7,39 +7,46 @@ import sys
 
 from .blocks import (
     AxialMultiHeadAttentionBlock,
+    UniAxialMultiHeadAttentionBlock,
     PosEncodingBlock,
     InpEncodingBlock,
+    UniInpEncodingBlock,
     ModEncodingBlock,
     PosFeedforwardBlock,
+    UniPosFeedforwardBlock
 )
 
 
 class InputEmbedding(layers.Layer):
     def __init__(self, enc_dim=128, equivar=False, 
-                 no_time=False):
+                 no_time=False, uni_mod=False,
+                 train_time_enc=False):
         super().__init__()
 
         self.pos_encoding = PosEncodingBlock(
-            enc_dim=enc_dim, equivar=equivar
+            enc_dim=enc_dim, equivar=equivar,
+            train_time_enc=train_time_enc
         )
-        self.inp_encoding = InpEncodingBlock(
-            enc_dim=enc_dim
-        )
+
+        if uni_mod:
+            self.inp_encoding = UniInpEncodingBlock(
+                enc_dim=enc_dim)
+        else:
+            self.inp_encoding = InpEncodingBlock(
+                enc_dim=enc_dim)
+
         self.mod_encoding = ModEncodingBlock(
             enc_dim=enc_dim
         )
+
         self.equivar = equivar
         self.no_time = no_time
-        
-        if not no_time:
-            self.w_t = tf.Variable(0.01, trainable=True)
 
     def call(self, inp, time, mask):
         """
         Input shapes:
           inp:  (b, t, m, i)
           time: (b, t)
-          mask: (b, t, m)
         Output shapes:
           return: (b, t, m, d), (b, t, t, d) if equivar
                   (b, t, m, d), None         else
@@ -52,9 +59,9 @@ class InputEmbedding(layers.Layer):
             return inp_enc + mod_enc, None
         else:
             if self.equivar:
-                return inp_enc + mod_enc, self.w_t * pos_enc
+                return inp_enc + mod_enc, pos_enc
             else:
-                return inp_enc + mod_enc + self.w_t * pos_enc, None
+                return inp_enc + mod_enc + pos_enc, None
 
 
 class ReZero(layers.Layer):
@@ -74,17 +81,29 @@ class AxialAttentionEncoder(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128, 
                  num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False,
-                 equivar=False):
+                 equivar=False, uni_mod=False):
         super().__init__()
 
-        self.axAttention = AxialMultiHeadAttentionBlock(
-            proj_dim=proj_dim, enc_dim=enc_dim,
-            num_head=num_head, drop_rate=drop_rate,
-            causal_mask=causal_mask, equivar=equivar,
-        )
-        self.posFeedforward = PosFeedforwardBlock(
-            enc_dim=enc_dim, ff_dim=ff_dim, drop_rate=drop_rate
-        )
+        if uni_mod:
+            self.axAttention = UniAxialMultiHeadAttentionBlock(
+                proj_dim=proj_dim, enc_dim=enc_dim,
+                num_head=num_head, drop_rate=drop_rate,
+                causal_mask=causal_mask, equivar=equivar
+            )
+            self.posFeedforward = UniPosFeedforwardBlock(
+                enc_dim=enc_dim, ff_dim=ff_dim,
+                drop_rate=drop_rate
+            )
+        else:
+            self.axAttention = AxialMultiHeadAttentionBlock(
+                proj_dim=proj_dim, enc_dim=enc_dim,
+                num_head=num_head, drop_rate=drop_rate,
+                causal_mask=causal_mask, equivar=equivar
+            )
+            self.posFeedforward = PosFeedforwardBlock(
+                enc_dim=enc_dim, ff_dim=ff_dim,
+                drop_rate=drop_rate
+            )
         
         if norm_type == 'layerNorm':
             def get_residual():
@@ -128,7 +147,7 @@ class MultiLayerAttention(layers.Layer):
     def __init__(self, proj_dim=128, enc_dim=128,
                  num_head=4, ff_dim=128, drop_rate=0.2, 
                  norm_type="reZero", causal_mask=False,
-                 equivar=False, num_layers=1):
+                 equivar=False, uni_mod=False, num_layers=1):
         super().__init__()
 
         self.num_layers = num_layers
@@ -137,27 +156,31 @@ class MultiLayerAttention(layers.Layer):
                           proj_dim=proj_dim, enc_dim=enc_dim,
                           num_head=num_head, ff_dim=ff_dim, 
                           drop_rate=drop_rate, norm_type=norm_type, 
-                          causal_mask=causal_mask, equivar=equivar)
+                          causal_mask=causal_mask, equivar=equivar,
+                          uni_mod=uni_mod)
 
         if num_layers >= 2: 
             self.layer2 = AxialAttentionEncoder(
                             proj_dim=proj_dim, enc_dim=enc_dim,
                             num_head=num_head, ff_dim=ff_dim, 
                             drop_rate=drop_rate, norm_type=norm_type, 
-                            causal_mask=causal_mask, equivar=equivar)
+                            causal_mask=causal_mask, equivar=equivar,
+                            uni_mod=uni_mod)
         if num_layers >= 3: 
             self.layer3 = AxialAttentionEncoder(
                             proj_dim=proj_dim, enc_dim=enc_dim,
                             num_head=num_head, ff_dim=ff_dim, 
                             drop_rate=drop_rate, norm_type=norm_type, 
-                            causal_mask=causal_mask, equivar=equivar)
+                            causal_mask=causal_mask, equivar=equivar,
+                            uni_mod=uni_mod)
         
         if num_layers >= 4: 
             self.layer4 = AxialAttentionEncoder(
                             proj_dim=proj_dim, enc_dim=enc_dim,
                             num_head=num_head, ff_dim=ff_dim, 
                             drop_rate=drop_rate, norm_type=norm_type, 
-                            causal_mask=causal_mask, equivar=equivar)
+                            causal_mask=causal_mask, equivar=equivar,
+                            uni_mod=uni_mod)
         
 
     def call(self, inp, pos, mask):
