@@ -1,6 +1,28 @@
 """Miscellenaous functions."""
 import tensorflow as tf
 
+
+class ReduceLRBacktrack(tf.keras.callbacks.ReduceLROnPlateau):
+    def __init__(self, best_path, monitor='val_auprc', 
+                 mode='max', factor=0.5, patience=5, 
+                 min_lr=1e-8):
+        super().__init__(
+            monitor=monitor, mode=mode, factor=factor, 
+            patience=patience, min_lr=min_lr
+        )
+        self.best_path = best_path
+
+    def on_epoch_end(self, epoch, logs=None):
+        current = logs.get(self.monitor)
+
+        if not self.monitor_op(current, self.best): # not new best
+            if self.wait+1 >= self.patience: # going to reduce lr
+                # load best model so far
+                self.model.load_weights(self.best_path)
+
+        super().on_epoch_end(epoch, logs) # actually reduce LR
+
+
 class WarmUpScheduler(tf.keras.callbacks.Callback):
     def __init__(self, final_lr, init_lr=0.0, warmup_steps=0):
         """Constructor for warmup learning rate scheduler.
@@ -34,7 +56,6 @@ class LearningRateLogger(tf.keras.callbacks.Callback):
             data=self.model.optimizer.lr, 
             step=epoch
         )
-
 
 class BatchPrinter(tf.keras.callbacks.Callback):
     def __init__(self):

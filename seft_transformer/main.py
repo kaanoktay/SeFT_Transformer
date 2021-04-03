@@ -9,17 +9,23 @@ import tensorflow as tf
 from tensorflow import keras
 
 from .training_utils import Preprocessing
-from .models import TimeSeriesTransformer
+from .models import (
+    TimeSeriesTransformer,
+    ConvCNP
+)
+
 from .callbacks import (
     WarmUpScheduler,
-    LearningRateLogger
+    LearningRateLogger,
+    ReduceLRBacktrack
 )
 
 import wandb
 from wandb.keras import WandbCallback
-wandb.init(project="master_thesis_kaan", entity="borgwardt")
+#wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
-tf.random.set_seed(83)
+tf.random.set_seed(87)
+checkpoint_filepath = './checkpoints/cp.ckpt'
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
 
 def parse_arguments():
@@ -30,11 +36,11 @@ def parse_arguments():
                         metavar="16", help='batch size')
     parser.add_argument('--num_epochs', type=int, default=200,
                         metavar="200", help='number of epochs')
-    parser.add_argument('--init_lr', type=float, default=2e-4,
-                        metavar="2e-4", help='initial learning rate')
-    parser.add_argument('--lr_warmup_steps', type=float, default=1e3,
-                        metavar="1e3", help='learning rate warmup steps')
-    parser.add_argument('--dropout_rate', type=float, default=0.2,
+    parser.add_argument('--init_lr', type=float, default=1e-4,
+                        metavar="1e-4", help='initial learning rate')
+    parser.add_argument('--lr_warmup_steps', type=float, default=5e3,
+                        metavar="5e3", help='learning rate warmup steps')
+    parser.add_argument('--drop_rate', type=float, default=0.2,
                         metavar="0.2", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
                         metavar="reZero", help='normalization type')
@@ -54,6 +60,24 @@ def parse_arguments():
                         action='store_true')
     parser.add_argument('--train_time_enc', default=False,
                         action='store_true')
+    parser.add_argument('--time_weight', type=float, default=0.0,
+                        metavar="0.0", help='weight of time encoding')
+    parser.add_argument('--mod_weight', type=float, default=1.0,
+                        metavar="1.0", help='weight of modality encoding')
+    parser.add_argument('--points_per_hour', type=float, default=2.0,
+                        metavar="2", help='points per hour for the grid')
+    parser.add_argument('--kernel_size', type=int, default=5,
+                        metavar="5", help='kernel size of conv layers')
+    parser.add_argument('--dilation_rate', type=int, default=1,
+                        metavar="1", help='dilation rate of conv layers')
+    parser.add_argument('--filter_size', type=int, default=128, 
+                        metavar="128", help='filter size of first conv layer')
+    parser.add_argument('--drop_rate_conv', type=float, default=0.3, 
+                        metavar="0.3", help='dropout rate of conv layers')
+    parser.add_argument('--drop_rate_dense', type=float, default=0.2, 
+                        metavar="0.2", help='dropout rate of dense layers')
+    parser.add_argument('--model_name', type=str, default='ConvCNP',
+                        metavar="convCNP", help='name of learning model')
     return parser.parse_args()
 
 def main():
@@ -61,14 +85,14 @@ def main():
     args = parse_arguments()
 
     # Add hyperparameters to wandb config
-    wandb.config.update(args)
+    #wandb.config.update(args)
 
-    # Hyperparameters
+    ## Hyperparameters
     batch_size = args.batch_size  # Default: 16
     num_epochs = args.num_epochs  # Default: 200
     init_lr = args.init_lr  # Default: 1e-4
     lr_warmup_steps = args.lr_warmup_steps  # Default: 2e3
-    dropout_rate = args.dropout_rate  # Default: 0.1
+    drop_rate = args.drop_rate  # Default: 0.1
     norm_type = args.norm_type  # Default: 'reZero'
     dataset = args.dataset  # Default: 'physionet2012'
     num_layers = args.num_layers  # Default: 1
@@ -78,31 +102,52 @@ def main():
     no_time = args.no_time  # Default: False
     uni_mod = args.uni_mod  # Default: False
     train_time_enc = args.train_time_enc  # Default: False
+    time_weight = args.time_weight  # Default: 0.0
+    mod_weight = args.mod_weight  # Default: 1.0
+    points_per_hour = args.points_per_hour  # Default: 2
+    kernel_size = args.kernel_size  # Default: 5
+    dilation_rate = args.dilation_rate  # Default: 2
+    filter_size = args.filter_size  # Default: 64
+    drop_rate_conv = args.drop_rate_conv  # Default: 0.2
+    drop_rate_dense = args.drop_rate_dense  # Default: 0.2
+    model_name = args.model_name  # Default: ConvCNP
 
-    # Load data
+    ## Load data
     transformation = Preprocessing(
         dataset=dataset, epochs=num_epochs, batch_size=batch_size)
 
     train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = \
         transformation._prepare_dataset_for_training()
-    
-    # Initialize the model
-    model = TimeSeriesTransformer(
-        proj_dim=proj_dim, num_head=num_heads,
-        enc_dim=proj_dim, pos_ff_dim=proj_dim,
-        pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
-        norm_type=norm_type, dataset=dataset,
-        equivar=equivariance, num_layers=num_layers,
-        no_time=no_time, uni_mod=uni_mod,
-        train_time_enc=train_time_enc
-    )
 
-    # Optimizer function
+    ## Initialize the model
+    if model_name=='Transformer':
+        model = TimeSeriesTransformer(
+            proj_dim=proj_dim, num_head=num_heads,
+            enc_dim=proj_dim, pos_ff_dim=proj_dim,
+            pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
+            norm_type=norm_type, dataset=dataset,
+            equivar=equivariance, num_layers=num_layers,
+            no_time=no_time, uni_mod=uni_mod,
+            train_time_enc=train_time_enc,
+            time_weight=time_weight, mod_weight=mod_weight
+        )
+    else:
+         model = ConvCNP(
+            points_per_hour=points_per_hour,
+            kernel_size=kernel_size,
+            dilation_rate=dilation_rate, 
+            filter_size=filter_size, 
+            drop_rate_conv=drop_rate_conv, 
+            drop_rate_dense=drop_rate_dense,
+            dataset=dataset
+        )
+
+    ## Optimizer function
     opt = keras.optimizers.Adam(
         learning_rate=init_lr
     )
 
-    # Loss function
+    ## Loss function
     if dataset == 'physionet2019':
         loss_fn = keras.losses.BinaryCrossentropy(
             from_logits=False,
@@ -115,7 +160,7 @@ def main():
             name="loss"
         )
 
-    # Compile the model
+    ## Compile the model
     model.compile(
         optimizer=opt,
         loss=loss_fn,
@@ -133,20 +178,29 @@ def main():
         warmup_steps=lr_warmup_steps
     )
 
-    # Callback for reducing the learning rate when loss get stuck in a plateau
-    lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
+    ## Callback for saving the weights of the best model
+    model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_filepath,
+        save_weights_only=True,
         monitor='val_loss',
+        mode='min',
+        save_best_only=True
+    )
+
+    lr_schedule_callback = ReduceLRBacktrack(
+        best_path=checkpoint_filepath,
+        monitor='val_loss', 
         mode='min',
         factor=0.5,
         patience=5,
         min_lr=1e-8
     )
 
-    # Callback for early stopping when val_loss does not improve anymore
+    # Callback for early stopping when val_auprc does not improve anymore
     early_stopping_callback = keras.callbacks.EarlyStopping(
-        monitor='val_loss',
-        mode='min',
-        patience=10,
+        monitor='val_auprc',
+        mode='max',
+        patience=12,
         restore_best_weights=True
     )
 
@@ -162,7 +216,8 @@ def main():
         callbacks=[lr_schedule_callback,
                    lr_warmup_callback,
                    lr_logger_callback,
-                   WandbCallback(),
+                   model_checkpoint_callback,
+                   #WandbCallback(),
                    early_stopping_callback]
     )
 

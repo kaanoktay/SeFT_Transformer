@@ -20,7 +20,8 @@ from .blocks import (
 class InputEmbedding(layers.Layer):
     def __init__(self, enc_dim=128, equivar=False, 
                  no_time=False, uni_mod=False,
-                 train_time_enc=False):
+                 train_time_enc=False, time_weight=0.0,
+                 mod_weight=0.0):
         super().__init__()
 
         self.pos_encoding = PosEncodingBlock(
@@ -42,6 +43,9 @@ class InputEmbedding(layers.Layer):
         self.equivar = equivar
         self.no_time = no_time
 
+        self.w_t = tf.Variable(time_weight, trainable=False)
+        self.w_m = tf.Variable(mod_weight, trainable=False)
+
     def call(self, inp, time, mask):
         """
         Input shapes:
@@ -51,9 +55,9 @@ class InputEmbedding(layers.Layer):
           return: (b, t, m, d), (b, t, t, d) if equivar
                   (b, t, m, d), None         else
         """
-        pos_enc = self.pos_encoding(time)
+        pos_enc = self.w_t * self.pos_encoding(time)
         inp_enc = self.inp_encoding(inp)
-        mod_enc = self.mod_encoding(inp)
+        mod_enc = self.w_m * self.mod_encoding(inp)
         
         if self.no_time:
             return inp_enc + mod_enc, None
@@ -232,13 +236,12 @@ class ClassPrediction(layers.Layer):
         if mask is not None:
             mask = rearrange(mask, 'b t m -> b t m 1')
             inp = tf.where(mask, inp, 0)
-        out = self.densePred1(self.dropout(inp)) # (b, t, m, f)
         # Calculate sum over the modalities
         if self.causal_mask:
-            out = reduce(out, 'b t m f -> b t f', 'sum')
+            out = reduce(inp, 'b t m f -> b t f', 'sum')
         # Calculate sum over the timesteps and modalities
         else:
-            out = reduce(out, 'b t m f -> b f', 'sum')
+            out = reduce(inp, 'b t m f -> b f', 'sum')
         # Calculate number of measured samples and normalize the sum
         mask = tf.cast(mask, dtype='float32')
         if self.causal_mask:
@@ -248,7 +251,365 @@ class ClassPrediction(layers.Layer):
         else:
             norm = reduce(mask, 'b t m 1-> b 1', 'sum')
             out = out / norm  # (b, f)
+
         # Predict the class
         # Project to an intermediate dimension
-        pred = self.densePred2(out) # (b, 1)
+        pred = self.densePred2(self.densePred1(self.dropout(out))) # (b, 1)
+
         return pred  # if causal_mask (b, t, 1) else (b, 1)
+
+
+class FuncRepresentation(keras.layers.Layer):
+    def __init__(self, points_per_hour):
+        super().__init__()
+
+        self.sigma = tf.Variable(
+            initial_value=2*(1/points_per_hour) * tf.ones(2), 
+            dtype=tf.float32,
+            trainable=True
+        )
+
+        num_points = int(50 * points_per_hour)
+        grid = tf.linspace(-1.0, 49.0, num_points)
+
+        self.num_points = num_points
+        self.grid = grid
+
+    def call(self, y, x, mask):
+        batch_size = tf.shape(y)[0]
+        num_mod = y.shape[1]
+
+        grid = tf.repeat(
+            self.grid[None,:,None], repeats=batch_size, axis=0
+        )
+
+        x = x[:,:,None]
+        dist = (grid - tf.transpose(x, perm=[0, 2, 1])) ** 2
+        
+        repeated_dist = tf.repeat(
+            dist[:,None,...], repeats=num_mod, axis=1
+        )
+
+        scales = self.sigma[None, None, None, None, :]
+        wt = tf.exp(-0.5 * (tf.expand_dims(repeated_dist, -1) / (scales ** 2)))
+
+        density = tf.cast(
+            mask, dtype=tf.float32
+        )
+
+        y_out = tf.concat(
+            [tf.expand_dims(density, -1), tf.expand_dims(y, -1)], axis=-1
+        )
+
+        y = tf.expand_dims(y_out, 2) * wt
+
+        func = tf.reduce_sum(y, -2)
+
+        density, conv = func[..., :1], func[..., 1:]
+        normalized_conv = conv / (density + 1e-8)
+        func = tf.concat([density, normalized_conv], axis=-1)
+        func = tf.transpose(func, perm=[0, 1, 3, 2])  
+        func = tf.reshape(func, shape=[-1,num_mod*2, self.num_points])
+
+        return tf.transpose(func, perm=[0, 2, 1])
+
+
+class ConvNet(keras.layers.Layer):
+    def __init__(self, kernel_size, dilation_rate, filter_size, 
+                 drop_rate_conv, drop_rate_dense):
+        super().__init__()
+
+        self.dropout_conv = keras.layers.Dropout(
+            rate = drop_rate_conv
+        )
+
+        self.dropout_dense_1 = keras.layers.Dropout(
+            rate = drop_rate_dense*1.5
+        )
+
+        self.dropout_dense_2 = keras.layers.Dropout(
+            rate = drop_rate_dense
+        )
+
+        self.conv_1 = keras.layers.Conv1D(
+            filters=filter_size,
+            kernel_size=kernel_size,
+            padding="same"
+        )
+
+        self.conv_2 = keras.layers.Conv1D(
+            filters=filter_size,
+            kernel_size=kernel_size,
+            padding="same"
+        )
+
+        self.conv_3 = keras.layers.Conv1D(
+            filters=filter_size*2,
+            kernel_size=kernel_size,
+            padding="same"
+        )
+
+        self.conv_4 = keras.layers.Conv1D(
+            filters=filter_size*2,
+            kernel_size=kernel_size,
+            padding="same"
+        )
+
+        self.conv_5 = keras.layers.Conv1D(
+            filters=filter_size*4,
+            kernel_size=kernel_size,
+            dilation_rate=dilation_rate,
+            padding="same"
+        )
+
+        self.conv_6 = keras.layers.Conv1D(
+            filters=filter_size*4,
+            kernel_size=kernel_size,
+            dilation_rate=dilation_rate,
+            padding="same"
+        )
+
+        self.dense_1 = keras.layers.Dense(512)
+
+        self.dense_2 = keras.layers.Dense(64)
+
+        self.dense_3 = keras.layers.Dense(1)
+
+        self.pool = keras.layers.MaxPooling1D(
+            pool_size=2
+        )
+
+        self.flatten = keras.layers.Flatten()
+
+        self.relu = keras.layers.Activation(keras.activations.relu)
+        self.sigmoid = keras.layers.Activation(keras.activations.sigmoid)
+
+    def call(self, x):
+        # 1st conv layer
+        z = self.relu(self.conv_1(x))
+
+        # 2nd conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.pool(self.conv_2(z)))
+
+        # 3rd conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.conv_3(z))
+
+        # 4th conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.pool(self.conv_4(z)))
+
+        # 5th conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.conv_5(z))
+
+        # 6th conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.pool(self.conv_6(z)))
+
+        # Flatten
+        z = self.flatten(z)
+
+        # First dense layer
+        z = self.dropout_dense_1(z)
+        z = self.relu(self.dense_1(z))
+
+        # Second dense layer
+        z = self.dropout_dense_2(z)
+        z = self.relu(self.dense_2(z))
+
+        # Last dense layer
+        z = self.sigmoid(self.dense_3(z))
+
+        return z
+
+
+class CausalFuncRepresentation(keras.layers.Layer):
+    def __init__(self, points_per_hour):
+        super().__init__()
+
+        self.sigma = tf.Variable(
+            initial_value=2 * tf.ones(2), 
+            dtype=tf.float32,
+            trainable=True
+        )
+
+        num_points = int(338 * points_per_hour)
+        grid = tf.linspace(0.0, 337.0, num_points)
+
+        self.num_points = num_points
+        self.grid = grid
+
+    def call(self, y, x, mask):
+        batch_size = tf.shape(y)[0]
+        num_mod = y.shape[1]
+
+        grid = tf.repeat(
+            self.grid[None,:,None], repeats=batch_size, axis=0
+        )
+
+        x = x[:,:,None]
+        dist = (grid - tf.transpose(x, perm=[0, 2, 1])) ** 2
+        
+        repeated_dist = tf.repeat(
+            dist[:,None,...], repeats=num_mod, axis=1
+        )
+
+        scales = self.sigma[None, None, None, None, :]
+        wt = tf.exp(-0.5 * (tf.expand_dims(repeated_dist, -1) / (scales ** 2)))
+
+        density = tf.cast(
+            mask, dtype=tf.float32
+        )
+
+        y_out = tf.concat(
+            [tf.expand_dims(density, -1), tf.expand_dims(y, -1)], axis=-1
+        )
+
+        y = tf.expand_dims(y_out, 2) * wt
+
+        func = tf.cumsum(y, -2)
+
+        density, conv = func[..., :1], func[..., 1:]
+        normalized_conv = conv / (density + 1e-8)
+
+        func = tf.concat([density, normalized_conv], axis=-1)
+        func = tf.transpose(func, perm=[0, 1, 4, 3, 2])
+        func = tf.reshape(
+            func,
+            shape=[batch_size, num_mod*2, -1, self.num_points]
+        )
+
+        return tf.transpose(func, perm=[0, 2, 3, 1])
+
+
+class CausalConvNet(keras.layers.Layer):
+    def __init__(self, kernel_size, dilation_rate, filter_size, 
+                 drop_rate_conv, drop_rate_dense):
+        super().__init__()
+
+        self.dropout_conv = layers.Dropout(
+            rate = drop_rate_conv
+        )
+
+        self.dropout_dense_1 = layers.Dropout(
+            rate = drop_rate_dense*1.5
+        )
+
+        self.dropout_dense_2 = layers.Dropout(
+            rate = drop_rate_dense
+        )
+
+        self.conv_1 = layers.TimeDistributed(
+            layers.Conv1D(
+                filters=filter_size,
+                kernel_size=kernel_size,
+                padding="same"
+            )
+        )
+
+        self.conv_2 = layers.TimeDistributed(
+            layers.Conv1D(
+                filters=filter_size,
+                kernel_size=kernel_size,
+                padding="same"
+            )
+        )
+
+        self.conv_3 = layers.TimeDistributed(
+            layers.Conv1D(
+                filters=filter_size*2,
+                kernel_size=kernel_size,
+                padding="same"
+            )
+        )
+
+        self.conv_4 = layers.TimeDistributed(
+            layers.Conv1D(
+                filters=filter_size*2,
+                kernel_size=kernel_size,
+                padding="same"
+            )
+        )
+
+        self.conv_5 = layers.TimeDistributed(
+            layers.Conv1D(
+                filters=filter_size*4,
+                kernel_size=kernel_size,
+                padding="same"
+            )
+        )
+
+        self.conv_6 = layers.TimeDistributed(
+            layers.Conv1D(
+                filters=filter_size*4,
+                kernel_size=kernel_size,
+                padding="same"
+            )
+        )
+
+        self.dense_1 = layers.Dense(512)
+
+        self.dense_2 = layers.Dense(64)
+
+        self.dense_3 = layers.Dense(1)
+
+        self.pool_1 = layers.TimeDistributed(
+            layers.MaxPooling1D(pool_size=2)
+        )
+
+        self.pool_2 = layers.TimeDistributed(
+            layers.MaxPooling1D(pool_size=2)
+        )
+
+        self.pool_3 = layers.TimeDistributed(
+            layers.MaxPooling1D(pool_size=2)
+        )
+
+        self.flatten = layers.TimeDistributed(
+            layers.Flatten()
+        )
+
+        self.relu = layers.Activation(keras.activations.relu)
+        self.sigmoid = layers.Activation(keras.activations.sigmoid)
+
+    def call(self, x):
+        # 1st conv layer
+        z = self.relu(self.conv_1(x))
+
+        # 2nd conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.pool_1(self.conv_2(z)))
+
+        # 3rd conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.conv_3(z))
+
+        # 4th conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.pool_2(self.conv_4(z)))
+
+        # 5th conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.conv_5(z))
+
+        # 6th conv layer
+        z = self.dropout_conv(z)
+        z = self.relu(self.pool_3(self.conv_6(z)))
+
+        # Flatten
+        z = self.flatten(z)
+
+        # First dense layer
+        z = self.dropout_dense_1(z)
+        z = self.relu(self.dense_1(z))
+
+        # Second dense layer
+        z = self.dropout_dense_2(z)
+        z = self.relu(self.dense_2(z))
+
+        # Last dense layer
+        z = self.sigmoid(self.dense_3(z))
+
+        return z
