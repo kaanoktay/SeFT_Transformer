@@ -22,8 +22,7 @@ class TimeSeriesTransformer(keras.Model):
                  pos_ff_dim=128, pred_ff_dim=32, drop_rate=0.2, 
                  norm_type='reZero', dataset='physionet2012',
                  equivar=False, num_layers=1, no_time=False,
-                 uni_mod=False, train_time_enc=False,
-                 time_weight=0.0, mod_weight=0.0):
+                 uni_mod=False, train_time_enc=False):
         super().__init__()
 
         if dataset=='physionet2019':
@@ -32,9 +31,8 @@ class TimeSeriesTransformer(keras.Model):
             self.causal_mask = False
 
         self.input_embedding = InputEmbedding(
-            enc_dim=enc_dim, equivar=equivar, no_time=no_time, 
-            uni_mod=uni_mod, train_time_enc=train_time_enc,
-            time_weight=time_weight, mod_weight=mod_weight
+            enc_dim=enc_dim, no_time=no_time, uni_mod=uni_mod, 
+            train_time_enc=train_time_enc
         )
 
         self.transformer_encoder = MultiLayerAttention(
@@ -68,6 +66,7 @@ class TimeSeriesTransformer(keras.Model):
                 # Compute the loss value
                 loss = self.compiled_loss(y, y_pred, sample_weight)
             else:
+                y = tf.expand_dims(y, -1)
                 # Forward pass
                 y_pred = self(x, training=True)
                 # Compute the loss value
@@ -80,7 +79,15 @@ class TimeSeriesTransformer(keras.Model):
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
         # Update metrics
         if self.causal_mask:
-            self.compiled_metrics.update_state(y, y_pred, sample_weight)
+            # Convert -100 --> 0 
+            mask = tf.cast(mask, dtype='int32')
+            y = tf.multiply(y, tf.expand_dims(mask, -1))
+            # Flatten labels and predictions
+            y = rearrange(y, 'b t 1 -> (b t) 1')
+            y_pred = rearrange(y_pred, 'b t 1 -> (b t) 1')
+            metric_mask = rearrange(mask, 'b t -> (b t)')
+            # Update metrics
+            self.compiled_metrics.update_state(y, y_pred, metric_mask)
         else:
             self.compiled_metrics.update_state(y, y_pred)
         # Return a dict mapping metric names to current value
@@ -103,6 +110,7 @@ class TimeSeriesTransformer(keras.Model):
             # Compute the loss value
             self.compiled_loss(y, y_pred, sample_weight)
         else:
+            y = tf.expand_dims(y, -1)
             # Forward pass
             y_pred = self(x, training=False)
             # Compute the loss value
@@ -110,7 +118,15 @@ class TimeSeriesTransformer(keras.Model):
 
         # Update metrics
         if self.causal_mask:
-            self.compiled_metrics.update_state(y, y_pred, sample_weight)
+            # Convert -100 --> 0 
+            mask = tf.cast(mask, dtype='int32')
+            y = tf.multiply(y, tf.expand_dims(mask, -1))
+            # Flatten labels and predictions
+            y = rearrange(y, 'b t 1 -> (b t) 1')
+            y_pred = rearrange(y_pred, 'b t 1 -> (b t) 1')
+            metric_mask = rearrange(mask, 'b t -> (b t)')
+            # Update metrics
+            self.compiled_metrics.update_state(y, y_pred, metric_mask)
         else:
             self.compiled_metrics.update_state(y, y_pred)
         # Return a dict mapping metric names to current value
@@ -185,6 +201,7 @@ class ConvCNP(keras.Model):
                 # Compute the loss value
                 loss = self.compiled_loss(y, y_pred, sample_weight)
             else:
+                y = tf.expand_dims(y, -1)
                 # Forward pass
                 y_pred = self(x, training=True)
                 # Compute the loss value
@@ -197,7 +214,15 @@ class ConvCNP(keras.Model):
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
         # Update metrics
         if self.causal_mask:
-            self.compiled_metrics.update_state(y, y_pred, sample_weight)
+            # Convert -100 --> 0 
+            mask = tf.cast(mask, dtype='int32')
+            y = tf.multiply(y, tf.expand_dims(mask, -1))
+            # Flatten labels and predictions
+            y = rearrange(y, 'b t 1 -> (b t) 1')
+            y_pred = rearrange(y_pred, 'b t 1 -> (b t) 1')
+            metric_mask = rearrange(mask, 'b t -> (b t)')
+            # Update metrics
+            self.compiled_metrics.update_state(y, y_pred, metric_mask)
         else:
             self.compiled_metrics.update_state(y, y_pred)
         # Return a dict mapping metric names to current value
@@ -220,6 +245,7 @@ class ConvCNP(keras.Model):
             # Compute the loss value
             self.compiled_loss(y, y_pred, sample_weight)
         else:
+            y = tf.expand_dims(y, -1)
             # Forward pass
             y_pred = self(x, training=False)
             # Compute the loss value
@@ -227,7 +253,15 @@ class ConvCNP(keras.Model):
 
         # Update metrics
         if self.causal_mask:
-            self.compiled_metrics.update_state(y, y_pred, sample_weight)
+            # Convert -100 --> 0 
+            mask = tf.cast(mask, dtype='int32')
+            y = tf.multiply(y, tf.expand_dims(mask, -1))
+            # Flatten labels and predictions
+            y = rearrange(y, 'b t 1 -> (b t) 1')
+            y_pred = rearrange(y_pred, 'b t 1 -> (b t) 1')
+            metric_mask = rearrange(mask, 'b t -> (b t)')
+            # Update metrics
+            self.compiled_metrics.update_state(y, y_pred, metric_mask)
         else:
             self.compiled_metrics.update_state(y, y_pred)
         # Return a dict mapping metric names to current value

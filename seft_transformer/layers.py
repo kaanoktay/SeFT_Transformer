@@ -18,15 +18,12 @@ from .blocks import (
 
 
 class InputEmbedding(layers.Layer):
-    def __init__(self, enc_dim=128, equivar=False, 
-                 no_time=False, uni_mod=False,
-                 train_time_enc=False, time_weight=0.0,
-                 mod_weight=0.0):
+    def __init__(self, enc_dim=128, no_time=False, 
+                 uni_mod=False, train_time_enc=False):
         super().__init__()
 
         self.pos_encoding = PosEncodingBlock(
-            enc_dim=enc_dim, equivar=equivar,
-            train_time_enc=train_time_enc
+            enc_dim=enc_dim, train_time_enc=train_time_enc
         )
 
         if uni_mod:
@@ -40,11 +37,7 @@ class InputEmbedding(layers.Layer):
             enc_dim=enc_dim
         )
 
-        self.equivar = equivar
         self.no_time = no_time
-
-        self.w_t = tf.Variable(time_weight, trainable=False)
-        self.w_m = tf.Variable(mod_weight, trainable=False)
 
     def call(self, inp, time, mask):
         """
@@ -52,20 +45,17 @@ class InputEmbedding(layers.Layer):
           inp:  (b, t, m, i)
           time: (b, t)
         Output shapes:
-          return: (b, t, m, d), (b, t, t, d) if equivar
-                  (b, t, m, d), None         else
+          return: (b, t, m, d), None          if no_time
+                  (b, t, m, d), (b, t, 1, d)  else
         """
-        pos_enc = self.w_t * self.pos_encoding(time)
+        pos_enc = self.pos_encoding(time)
         inp_enc = self.inp_encoding(inp)
-        mod_enc = self.w_m * self.mod_encoding(inp)
+        mod_enc = self.mod_encoding(inp)
         
         if self.no_time:
             return inp_enc + mod_enc, None
         else:
-            if self.equivar:
-                return inp_enc + mod_enc, pos_enc
-            else:
-                return inp_enc + mod_enc + pos_enc, None
+            return inp_enc + mod_enc, pos_enc
 
 
 class ReZero(layers.Layer):
@@ -186,12 +176,11 @@ class MultiLayerAttention(layers.Layer):
                             causal_mask=causal_mask, equivar=equivar,
                             uni_mod=uni_mod)
         
-
     def call(self, inp, pos, mask):
         """
         Input shapes:
           inp:  (b, t, m, d)
-          pos:  (b, t, t, d)
+          pos:  (b, t, 1, d)
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, d)

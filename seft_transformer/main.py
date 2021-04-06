@@ -24,8 +24,7 @@ import wandb
 from wandb.keras import WandbCallback
 #wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
-tf.random.set_seed(87)
-checkpoint_filepath = './checkpoints/cp.ckpt'
+tf.random.set_seed(42)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
 
 def parse_arguments():
@@ -40,8 +39,8 @@ def parse_arguments():
                         metavar="1e-4", help='initial learning rate')
     parser.add_argument('--lr_warmup_steps', type=float, default=5e3,
                         metavar="5e3", help='learning rate warmup steps')
-    parser.add_argument('--drop_rate', type=float, default=0.2,
-                        metavar="0.2", help='dropout rate')
+    parser.add_argument('--drop_rate', type=float, default=0.3,
+                        metavar="0.3", help='dropout rate')
     parser.add_argument('--norm_type', type=str, default='reZero',
                         metavar="reZero", help='normalization type')
     parser.add_argument('--dataset', type=str, default='physionet2012',
@@ -52,7 +51,7 @@ def parse_arguments():
                         metavar='64', help='projection dimension')
     parser.add_argument('--num_heads', type=int, default='2',
                         metavar='2', help='number of heads')
-    parser.add_argument('--equivariance', default=False, 
+    parser.add_argument('--equivariance', default=False,
                         action='store_true')
     parser.add_argument('--no_time', default=False,
                         action='store_true')
@@ -60,10 +59,6 @@ def parse_arguments():
                         action='store_true')
     parser.add_argument('--train_time_enc', default=False,
                         action='store_true')
-    parser.add_argument('--time_weight', type=float, default=0.0,
-                        metavar="0.0", help='weight of time encoding')
-    parser.add_argument('--mod_weight', type=float, default=1.0,
-                        metavar="1.0", help='weight of modality encoding')
     parser.add_argument('--points_per_hour', type=float, default=2.0,
                         metavar="2", help='points per hour for the grid')
     parser.add_argument('--kernel_size', type=int, default=5,
@@ -76,8 +71,8 @@ def parse_arguments():
                         metavar="0.3", help='dropout rate of conv layers')
     parser.add_argument('--drop_rate_dense', type=float, default=0.2, 
                         metavar="0.2", help='dropout rate of dense layers')
-    parser.add_argument('--model_name', type=str, default='ConvCNP',
-                        metavar="convCNP", help='name of learning model')
+    parser.add_argument('--model_name', type=str, default='Transformer',
+                        metavar="Transformer", help='name of learning model')
     return parser.parse_args()
 
 def main():
@@ -92,7 +87,7 @@ def main():
     num_epochs = args.num_epochs  # Default: 200
     init_lr = args.init_lr  # Default: 1e-4
     lr_warmup_steps = args.lr_warmup_steps  # Default: 2e3
-    drop_rate = args.drop_rate  # Default: 0.1
+    drop_rate = args.drop_rate  # Default: 0.3
     norm_type = args.norm_type  # Default: 'reZero'
     dataset = args.dataset  # Default: 'physionet2012'
     num_layers = args.num_layers  # Default: 1
@@ -102,15 +97,13 @@ def main():
     no_time = args.no_time  # Default: False
     uni_mod = args.uni_mod  # Default: False
     train_time_enc = args.train_time_enc  # Default: False
-    time_weight = args.time_weight  # Default: 0.0
-    mod_weight = args.mod_weight  # Default: 1.0
     points_per_hour = args.points_per_hour  # Default: 2
     kernel_size = args.kernel_size  # Default: 5
     dilation_rate = args.dilation_rate  # Default: 2
     filter_size = args.filter_size  # Default: 64
     drop_rate_conv = args.drop_rate_conv  # Default: 0.2
     drop_rate_dense = args.drop_rate_dense  # Default: 0.2
-    model_name = args.model_name  # Default: ConvCNP
+    model_name = args.model_name  # Default: Transformer
 
     ## Load data
     transformation = Preprocessing(
@@ -118,24 +111,23 @@ def main():
 
     train_iter, steps_per_epoch, val_iter, val_steps, test_iter, test_steps = \
         transformation._prepare_dataset_for_training()
-
+    
     ## Initialize the model
     if model_name=='Transformer':
         model = TimeSeriesTransformer(
             proj_dim=proj_dim, num_head=num_heads,
             enc_dim=proj_dim, pos_ff_dim=proj_dim,
-            pred_ff_dim=proj_dim/4, drop_rate=dropout_rate,
+            pred_ff_dim=proj_dim/4, drop_rate=drop_rate,
             norm_type=norm_type, dataset=dataset,
             equivar=equivariance, num_layers=num_layers,
             no_time=no_time, uni_mod=uni_mod,
-            train_time_enc=train_time_enc,
-            time_weight=time_weight, mod_weight=mod_weight
+            train_time_enc=train_time_enc
         )
     else:
          model = ConvCNP(
             points_per_hour=points_per_hour,
             kernel_size=kernel_size,
-            dilation_rate=dilation_rate, 
+            dilation_rate=dilation_rate,
             filter_size=filter_size, 
             drop_rate_conv=drop_rate_conv, 
             drop_rate_dense=drop_rate_dense,
@@ -178,7 +170,13 @@ def main():
         warmup_steps=lr_warmup_steps
     )
 
-    ## Callback for saving the weights of the best model
+    # Determine the filepath for saving the model
+    if equivariance:
+        checkpoint_filepath = './checkpoints/' + dataset + '/trEq/cp.cpkt'
+    else:
+        checkpoint_filepath = './checkpoints/' + dataset + '/noEq/cp.cpkt'
+    
+    # Callback for saving the weights of the best model
     model_checkpoint_callback = keras.callbacks.ModelCheckpoint(
         filepath=checkpoint_filepath,
         save_weights_only=True,
@@ -187,9 +185,9 @@ def main():
         save_best_only=True
     )
 
-    lr_schedule_callback = ReduceLRBacktrack(
-        best_path=checkpoint_filepath,
-        monitor='val_loss', 
+    # Callback for reducing the learning rate when loss get stuck in a plateau
+    lr_schedule_callback = keras.callbacks.ReduceLROnPlateau(
+        monitor='val_loss',
         mode='min',
         factor=0.5,
         patience=5,
@@ -217,7 +215,7 @@ def main():
                    lr_warmup_callback,
                    lr_logger_callback,
                    model_checkpoint_callback,
-                   #WandbCallback(),
+                   WandbCallback(),
                    early_stopping_callback]
     )
 

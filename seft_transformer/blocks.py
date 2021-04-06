@@ -1,5 +1,8 @@
 import tensorflow as tf
-from tensorflow.linalg import LinearOperatorLowerTriangular
+from tensorflow.linalg import \
+    LinearOperatorLowerTriangular, \
+    LinearOperatorBlockDiag, \
+    LinearOperatorFullMatrix
 from tensorflow.keras import layers
 from einops import rearrange, repeat
 import numpy as np
@@ -9,8 +12,7 @@ import sys
 class PosEncodingBlock(layers.Layer):
     """Positional encodings layer."""
 
-    def __init__(self, enc_dim=128, equivar=False,
-                 train_time_enc=False):
+    def __init__(self, enc_dim=128, train_time_enc=False):
         super().__init__()
 
         f = tf.math.exp(
@@ -19,7 +21,6 @@ class PosEncodingBlock(layers.Layer):
         )
         
         self.f = tf.Variable(f, trainable=train_time_enc)
-        self.equivar = equivar
 
     def call(self, time):
         """
@@ -29,28 +30,15 @@ class PosEncodingBlock(layers.Layer):
           return: (b, t, t, d) if equivar
                   (b, t, 1, d) else
         """
-        if self.equivar:
-            rel_time = rearrange(time, 'b t -> b t 1') - \
-                rearrange(time, 'b t -> b 1 t')  # relative time (b, t, t)
-            # Calculate sine and cosine components
-            angles = tf.einsum(
-                'btl,f->btlf', rel_time, self.f)  # (b, t, t, d/2)
-            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, t, d/2)
-            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, t, d/2)
-            # Construct positional encodings
-            pos_enc = rearrange(
-                [sin_enc, cos_enc],  'z b t l k -> b t l (k z)')
-            return pos_enc  # (b, t, t, d)
-        else:
-            # Calculate sine and cosine components
-            angles = tf.einsum(
-                'bt,f->btf', time, self.f)  # (b, t, d/2)
-            sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
-            cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
-            # Construct positional encodings
-            pos_enc = rearrange(
-                [sin_enc, cos_enc],  'z b t k -> b t 1 (k z)')
-            return pos_enc  # (b, t, 1, d)
+        # Calculate sine and cosine components
+        angles = tf.einsum(
+            'bt,f->btf', time, self.f)  # (b, t, d/2)
+        sin_enc = tf.math.sin(angles)  # sin encodings (b, t, d/2)
+        cos_enc = tf.math.cos(angles)  # cos encodings (b, t, d/2)
+        # Construct positional encodings
+        pos_enc = rearrange(
+            [sin_enc, cos_enc],  'z b t k -> b t 1 (k z)')
+        return pos_enc  # (b, t, 1, d)
 
 
 class InpEncodingBlock(layers.Layer):
@@ -161,6 +149,7 @@ class SeqAttentionBlock(layers.Layer):
         num_mod = input_shape[-2]
         # Weight and bias initializers
         w_init = tf.keras.initializers.glorot_uniform()
+        t_init = tf.random_normal_initializer()
         b_init = tf.zeros_initializer()
         # Weight matrix and bias: query
         self.Wq = tf.Variable(
@@ -196,16 +185,37 @@ class SeqAttentionBlock(layers.Layer):
             trainable=True
         )
         if self.equivar:
-            ## Scalable approach
-            # Dense layers: time encodings
-            self.time_dense = layers.Dense(self.proj_dim)
-            # Weight matrix and bias: query/key for time
-            self.Wt = tf.Variable(
+            self.alpha = tf.Variable(
+                initial_value=t_init(
+                    shape=(num_mod, self.proj_dim//2), dtype="float32"),
+                trainable=True
+            )
+
+            self.beta = tf.Variable(
+                initial_value=t_init(
+                    shape=(num_mod, self.proj_dim//2), dtype="float32"),
+                trainable=True
+            )
+        else:
+            # Weight matrix and bias: time query
+            self.Wq_t = tf.Variable(
                 initial_value=w_init(
                     shape=(num_mod, self.proj_dim, input_dim), dtype="float32"),
                 trainable=True
             )
-            self.Bt = tf.Variable(
+            self.Bq_t = tf.Variable(
+                initial_value=b_init(
+                    shape=(num_mod, self.proj_dim), dtype="float32"),
+                trainable=True
+            )
+
+            # Weight matrix and bias: time key
+            self.Wk_t = tf.Variable(
+                initial_value=w_init(
+                    shape=(num_mod, self.proj_dim, input_dim), dtype="float32"),
+                trainable=True
+            )
+            self.Bk_t = tf.Variable(
                 initial_value=b_init(
                     shape=(num_mod, self.proj_dim), dtype="float32"),
                 trainable=True
@@ -215,15 +225,36 @@ class SeqAttentionBlock(layers.Layer):
         """
         Input shapes:
           inp:  (b, t, m, d)
-          pos:  (b, t, t, d)
+          pos:  (b, t, 1, d)
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, p)
         """
-        # Project query, key and value
+        # Project query, key, value and time
         q = tf.linalg.matvec(self.Wq, inp) + self.Bq
         k = tf.linalg.matvec(self.Wk, inp) + self.Bk
         v = tf.linalg.matvec(self.Wv, inp) + self.Bv
+        
+        if self.equivar:
+            mat = tf.stack(
+                [self.alpha, self.beta, -self.beta, self.alpha], 
+                axis=-1
+            )
+            mat = rearrange(
+                mat,
+                'm p (b1 b2) -> m p b1 b2',
+                b1=2, b2=2
+            )
+            mat = [LinearOperatorFullMatrix(mat[:,i,:,:])
+                   for i in range(self.proj_dim//2)]
+                   
+            mat = LinearOperatorBlockDiag(mat).to_dense()
+            q_t = tf.linalg.matvec(mat, pos)
+            k_t = pos
+        else:
+            q_t = tf.linalg.matvec(self.Wq_t, pos) + self.Bq_t
+            k_t = tf.linalg.matvec(self.Wk_t, pos) + self.Bk_t
+            
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
@@ -231,20 +262,16 @@ class SeqAttentionBlock(layers.Layer):
                       h=self.num_head)  # (b, m, h, t, e)
         v = rearrange(v, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
+        q_t = rearrange(q_t, 'b t m (h e) -> b m h t e',
+                      h=self.num_head)  # (b, m, h, t, e)
+        k_t = rearrange(k_t, 'b t m (h e) -> b m h t e',
+                      h=self.num_head)  # (b, 1, h, t, e)
+
         # Calculate attention scores
-        score = tf.einsum('...ij,...kj->...ik', q, k)
-        score = score / (self.embed_dim**0.5)  # (b, m, h, t, t)
-
-        if self.equivar:
-            # Project query/key for time
-            q_t = tf.linalg.matvec(self.Wt, inp) + self.Bt
-            q_t = rearrange(q_t, 'b t m (h e) -> b m h t e',
-                            h=self.num_head)  # (b, m, h, t, e)
-            t = self.time_dense(pos)
-            t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
-                          h=self.num_head)  # (b, 1, h, t, t, e)
-            score = score + tf.linalg.matvec(t, q_t)/(self.embed_dim**0.5)
-
+        score = tf.einsum('...ij,...kj->...ik', q, k) + \
+            tf.einsum('...ij,...kj->...ik', q_t, k_t)
+        score = score / (2 * self.embed_dim**0.5)  # (b, m, h, t, t)
+        
         # Apply mask and causal mask if needed
         causal_mask = None
         if self.causal_mask:
@@ -296,16 +323,14 @@ class UniSeqAttentionBlock(layers.Layer):
         self.key_dense = layers.Dense(proj_dim)
         self.value_dense = layers.Dense(proj_dim)
 
-        if equivar:
-            # Dense layers: time encodings
-            self.time_dense = layers.Dense(proj_dim)
-            self.time_query_dense = layers.Dense(proj_dim)
+        self.query_t_dense = layers.Dense(proj_dim)
+        self.key_t_dense = layers.Dense(proj_dim)
         
     def call(self, inp, pos, mask):
         """
         Input shapes:
           inp:  (b, t, m, d)
-          pos:  (b, t, t, d)
+          pos:  (b, t, 1, d)
           mask: (b, t, m)
         Output shapes:
           return: (b, t, m, p)
@@ -314,6 +339,8 @@ class UniSeqAttentionBlock(layers.Layer):
         q = self.query_dense(inp)  # (b, t, m, p)
         k = self.key_dense(inp)   # (b, t, m, p)
         v = self.value_dense(inp)  # (b, t, m, p)
+        q = self.query_t_dense(pos)  # (b, t, 1, p)
+        k = self.key_t_dense(pos)   # (b, t, 1, p)
         # Separate heads
         q = rearrange(q, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
@@ -321,18 +348,16 @@ class UniSeqAttentionBlock(layers.Layer):
                       h=self.num_head)  # (b, m, h, t, e)
         v = rearrange(v, 'b t m (h e) -> b m h t e',
                       h=self.num_head)  # (b, m, h, t, e)
+        q_t = rearrange(q_t, 'b t 1 (h e) -> b 1 h t e',
+                      h=self.num_head)  # (b, 1, h, t, e)
+        k_t = rearrange(k_t, 'b t 1 (h e) -> b 1 h t e',
+                      h=self.num_head)  # (b, 1, h, t, e)
+
         # Calculate attention scores
-        score = tf.einsum('...ij,...kj->...ik', q, k)
-        score = score / (self.embed_dim**0.5)  # (b, m, h, t, t)
-        if self.equivar:
-            # Project query/key for time
-            q_t = self.time_query_dense(inp)
-            q_t = rearrange(q_t, 'b t m (h e) -> b m h t e',
-                            h=self.num_head)  # (b, m, h, t, e)
-            t = self.time_dense(pos)
-            t = rearrange(t, 'b t l (h e) -> b 1 h t l e',
-                          h=self.num_head)  # (b, 1, h, t, t, e)
-            score = score + tf.linalg.matvec(t, q_t)/(self.embed_dim**0.5)
+        score = tf.einsum('...ij,...kj->...ik', q, k) + \
+            tf.einsum('...ij,...kj->...ik', q_t, k_t)
+        score = score / (2 * self.embed_dim**0.5)  # (b, m, h, t, t)
+
         # Apply mask and causal mask if needed
         causal_mask = None
         if self.causal_mask:
