@@ -22,9 +22,8 @@ from .callbacks import (
 
 import wandb
 from wandb.keras import WandbCallback
-#wandb.init(project="master_thesis_kaan", entity="borgwardt")
+wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
-tf.random.set_seed(42)
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
 
 def parse_arguments():
@@ -80,7 +79,7 @@ def main():
     args = parse_arguments()
 
     # Add hyperparameters to wandb config
-    #wandb.config.update(args)
+    wandb.config.update(args)
 
     ## Hyperparameters
     batch_size = args.batch_size  # Default: 16
