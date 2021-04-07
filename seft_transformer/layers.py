@@ -313,7 +313,7 @@ class ConvNet(keras.layers.Layer):
         )
 
         self.dropout_dense_1 = keras.layers.Dropout(
-            rate = drop_rate_dense*1.5
+            rate = drop_rate_dense
         )
 
         self.dropout_dense_2 = keras.layers.Dropout(
@@ -483,77 +483,65 @@ class CausalConvNet(keras.layers.Layer):
         )
 
         self.dropout_dense_1 = layers.Dropout(
-            rate = drop_rate_dense*1.5
+            rate = drop_rate_dense
         )
 
         self.dropout_dense_2 = layers.Dropout(
             rate = drop_rate_dense
         )
 
-        self.conv_1 = layers.TimeDistributed(
-            layers.Conv1D(
-                filters=filter_size,
-                kernel_size=kernel_size,
-                padding="same"
-            )
+        self.conv_1 = layers.Conv2D(
+            filters=filter_size,
+            kernel_size=kernel_size
+        )
+        
+        self.conv_2 = layers.Conv2D(
+            filters=filter_size,
+            kernel_size=kernel_size
         )
 
-        self.conv_2 = layers.TimeDistributed(
-            layers.Conv1D(
-                filters=filter_size,
-                kernel_size=kernel_size,
-                padding="same"
-            )
+        self.conv_3 = layers.Conv2D(
+            filters=filter_size*2,
+            kernel_size=kernel_size
         )
 
-        self.conv_3 = layers.TimeDistributed(
-            layers.Conv1D(
-                filters=filter_size*2,
-                kernel_size=kernel_size,
-                padding="same"
-            )
+        self.conv_4 = layers.Conv2D(
+            filters=filter_size*2,
+            kernel_size=kernel_size
         )
 
-        self.conv_4 = layers.TimeDistributed(
-            layers.Conv1D(
-                filters=filter_size*2,
-                kernel_size=kernel_size,
-                padding="same"
-            )
+        self.conv_5 = layers.Conv2D(
+            filters=filter_size*4,
+            kernel_size=kernel_size
         )
 
-        self.conv_5 = layers.TimeDistributed(
-            layers.Conv1D(
-                filters=filter_size*4,
-                kernel_size=kernel_size,
-                padding="same"
-            )
+        self.conv_6 = layers.Conv2D(
+            filters=filter_size*4,
+            kernel_size=kernel_size
         )
 
-        self.conv_6 = layers.TimeDistributed(
-            layers.Conv1D(
-                filters=filter_size*4,
-                kernel_size=kernel_size,
-                padding="same"
-            )
+        pad_size = int((kernel_size - 1) / 2)
+
+        self.padding = tf.keras.layers.ZeroPadding2D(
+            padding=((pad_size*2, 0), (pad_size, pad_size))
         )
 
-        self.dense_1 = layers.Dense(512)
+        self.dense_1 = layers.Dense(256)
 
-        self.dense_2 = layers.Dense(64)
+        self.dense_2 = layers.Dense(32)
 
         self.dense_3 = layers.Dense(1)
 
         self.pool_1 = layers.TimeDistributed(
-            layers.MaxPooling1D(pool_size=2)
+            layers.MaxPooling1D(pool_size=4)
         )
 
         self.pool_2 = layers.TimeDistributed(
-            layers.MaxPooling1D(pool_size=2)
+            layers.MaxPooling1D(pool_size=4)
         )
 
         self.pool_3 = layers.TimeDistributed(
-            layers.MaxPooling1D(pool_size=2)
+            layers.MaxPooling1D(pool_size=4)
         )
 
         self.flatten = layers.TimeDistributed(
@@ -565,26 +553,32 @@ class CausalConvNet(keras.layers.Layer):
 
     def call(self, x):
         # 1st conv layer
-        z = self.relu(self.conv_1(x))
+        z = self.padding(x)
+        z = self.relu(self.conv_1(z))
 
         # 2nd conv layer
         z = self.dropout_conv(z)
+        z = self.padding(z)
         z = self.relu(self.pool_1(self.conv_2(z)))
 
         # 3rd conv layer
         z = self.dropout_conv(z)
+        z = self.padding(z)
         z = self.relu(self.conv_3(z))
 
         # 4th conv layer
         z = self.dropout_conv(z)
+        z = self.padding(z)
         z = self.relu(self.pool_2(self.conv_4(z)))
 
         # 5th conv layer
         z = self.dropout_conv(z)
+        z = self.padding(z)
         z = self.relu(self.conv_5(z))
 
         # 6th conv layer
         z = self.dropout_conv(z)
+        z = self.padding(z)
         z = self.relu(self.pool_3(self.conv_6(z)))
 
         # Flatten

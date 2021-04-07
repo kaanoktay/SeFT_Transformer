@@ -4,25 +4,22 @@ import os
 import sys
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-os.environ['WANDB_SILENT'] = 'true'
 import tensorflow as tf
 from tensorflow import keras
 
 from .training_utils import Preprocessing
 from .models import (
-    TimeSeriesTransformer,
-    ConvCNP
+    TimeSeriesAxialTransformer,
+    MultimodalConvolutionalSetFunction
 )
 
 from .callbacks import (
     WarmUpScheduler,
-    LearningRateLogger,
-    ReduceLRBacktrack
+    LearningRateLogger
 )
 
 import wandb
 from wandb.keras import WandbCallback
-wandb.init(project="master_thesis_kaan", entity="borgwardt")
 
 print("GPUs Available: ", tf.config.experimental.list_physical_devices('GPU'))
 
@@ -68,18 +65,15 @@ def parse_arguments():
                         metavar="128", help='filter size of first conv layer')
     parser.add_argument('--drop_rate_conv', type=float, default=0.3, 
                         metavar="0.3", help='dropout rate of conv layers')
-    parser.add_argument('--drop_rate_dense', type=float, default=0.2, 
+    parser.add_argument('--drop_rate_dense', type=float, default=0.2,
                         metavar="0.2", help='dropout rate of dense layers')
-    parser.add_argument('--model_name', type=str, default='Transformer',
-                        metavar="Transformer", help='name of learning model')
+    parser.add_argument('--model_name', type=str, default='M-ConvSF',
+                        metavar="M-ConvSF", help='name of learning model')
     return parser.parse_args()
 
 def main():
     """Parse command line arguments and train model."""
     args = parse_arguments()
-
-    # Add hyperparameters to wandb config
-    wandb.config.update(args)
 
     ## Hyperparameters
     batch_size = args.batch_size  # Default: 16
@@ -100,9 +94,9 @@ def main():
     kernel_size = args.kernel_size  # Default: 5
     dilation_rate = args.dilation_rate  # Default: 2
     filter_size = args.filter_size  # Default: 64
-    drop_rate_conv = args.drop_rate_conv  # Default: 0.2
+    drop_rate_conv = args.drop_rate_conv  # Default: 0.3
     drop_rate_dense = args.drop_rate_dense  # Default: 0.2
-    model_name = args.model_name  # Default: Transformer
+    model_name = args.model_name  # Default: 'M-ConvSF'
 
     ## Load data
     transformation = Preprocessing(
@@ -112,8 +106,8 @@ def main():
         transformation._prepare_dataset_for_training()
     
     ## Initialize the model
-    if model_name=='Transformer':
-        model = TimeSeriesTransformer(
+    if model_name=='M-AxAttn':
+        model = TimeSeriesAxialTransformer(
             proj_dim=proj_dim, num_head=num_heads,
             enc_dim=proj_dim, pos_ff_dim=proj_dim*2,
             pred_ff_dim=proj_dim/2, drop_rate=drop_rate,
@@ -122,13 +116,13 @@ def main():
             no_time=no_time, uni_mod=uni_mod,
             train_time_enc=train_time_enc
         )
-    else:
-         model = ConvCNP(
+    if model_name=='M-ConvSF':
+         model = MultimodalConvolutionalSetFunction(
             points_per_hour=points_per_hour,
             kernel_size=kernel_size,
             dilation_rate=dilation_rate,
             filter_size=filter_size, 
-            drop_rate_conv=drop_rate_conv, 
+            drop_rate_conv=drop_rate_conv,
             drop_rate_dense=drop_rate_dense,
             dataset=dataset
         )
@@ -214,7 +208,6 @@ def main():
                    lr_warmup_callback,
                    lr_logger_callback,
                    model_checkpoint_callback,
-                   WandbCallback(),
                    early_stopping_callback]
     )
 

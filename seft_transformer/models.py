@@ -15,7 +15,7 @@ from .layers import (
 )
 
 
-class TimeSeriesTransformer(keras.Model):
+class TimeSeriesAxialTransformer(keras.Model):
     """Time Series Transformer model."""
 
     def __init__(self, proj_dim=128, num_head=4, enc_dim=128, 
@@ -162,7 +162,7 @@ class TimeSeriesTransformer(keras.Model):
             return pred
 
 
-class ConvCNP(keras.Model):
+class MultimodalConvolutionalSetFunction(keras.Model):
     def __init__(self, points_per_hour, kernel_size, 
                  dilation_rate, filter_size, drop_rate_conv, 
                  drop_rate_dense, dataset):
