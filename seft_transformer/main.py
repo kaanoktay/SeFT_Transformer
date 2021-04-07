@@ -85,7 +85,7 @@ def main():
     batch_size = args.batch_size  # Default: 16
     num_epochs = args.num_epochs  # Default: 200
     init_lr = args.init_lr  # Default: 1e-4
-    lr_warmup_steps = args.lr_warmup_steps  # Default: 2e3
+    lr_warmup_steps = args.lr_warmup_steps  # Default: 5e3
     drop_rate = args.drop_rate  # Default: 0.3
     norm_type = args.norm_type  # Default: 'reZero'
     dataset = args.dataset  # Default: 'physionet2012'
@@ -115,8 +115,8 @@ def main():
     if model_name=='Transformer':
         model = TimeSeriesTransformer(
             proj_dim=proj_dim, num_head=num_heads,
-            enc_dim=proj_dim, pos_ff_dim=proj_dim,
-            pred_ff_dim=proj_dim/4, drop_rate=drop_rate,
+            enc_dim=proj_dim, pos_ff_dim=proj_dim*2,
+            pred_ff_dim=proj_dim/2, drop_rate=drop_rate,
             norm_type=norm_type, dataset=dataset,
             equivar=equivariance, num_layers=num_layers,
             no_time=no_time, uni_mod=uni_mod,
